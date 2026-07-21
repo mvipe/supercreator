@@ -41,6 +41,7 @@ function SignupInner() {
     if (!name.trim()) { setErr("Please enter your name."); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) { setErr("Enter a valid email address."); return; }
     if (password.length < 8) { setErr("Password must be at least 8 characters."); return; }
+    if (phone.length !== 10) { setErr("Enter your 10-digit mobile number."); return; }
     setBusy(true);
     try {
       const res = await fetch("/api/auth/send-otp", {
@@ -110,7 +111,8 @@ function SignupInner() {
                 <div className="flex overflow-hidden rounded-[10px] border border-line focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
                   <span className="flex items-center border-r border-line bg-paper px-3 text-sm font-semibold text-inkmuted">+91</span>
                   <input className="w-full px-3.5 py-2.5 text-sm outline-none" type="tel" inputMode="numeric" placeholder="98765 43210"
-                    value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                    maxLength={10}
+                    value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} required />
                 </div>
                 <p className="mt-1 text-xs text-inkmuted">We&rsquo;ll verify this with an OTP.</p>
               </div>
