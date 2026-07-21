@@ -339,6 +339,7 @@ const CREATOR_CARDS = [
 function TopCreators() {
   const [i, setI] = useState(0);
   const [sel, setSel] = useState(1); // "Offer 1:1 sessions" opens by default
+  const [shown, setShown] = useState(3); // mobile list: 3 at a time
   const perView = 3;
   const max = Math.max(0, CREATOR_CARDS.length - perView);
   const active = CREATOR_CARDS[sel];
@@ -350,9 +351,10 @@ function TopCreators() {
       </h2>
 
       {/* Phones: a simple vertical list (3-across squeezes to one word per
-          line). sm+: the sliding carousel. */}
+          line). Starts at 3 cards; "Show more" reveals the next 3 so the list
+          doesn't dominate the page. sm+: the sliding carousel. */}
       <div className="space-y-2.5 p-4 sm:hidden">
-        {CREATOR_CARDS.map((c, idx) => (
+        {CREATOR_CARDS.slice(0, shown).map((c, idx) => (
           <button key={c.id} onClick={() => setSel(idx)}
             className={`block w-full rounded-xl border p-4 text-left transition-colors ${
               idx === sel ? "border-[#B6E7C9] bg-[#F6FCF8]" : "border-line"
@@ -361,6 +363,12 @@ function TopCreators() {
             <p className="mt-1 text-sm leading-snug text-inkmuted">{c.desc}</p>
           </button>
         ))}
+        {shown < CREATOR_CARDS.length && (
+          <button onClick={() => setShown((n) => Math.min(n + 3, CREATOR_CARDS.length))}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2.5 text-sm font-bold text-brand">
+            Show more <IconArrow className="h-3.5 w-3.5 rotate-90" />
+          </button>
+        )}
       </div>
 
       {/* carousel (sm and up) */}
@@ -478,17 +486,21 @@ function FeatureArt({ card }) {
 /** Feedback goes straight to the creator's own channel. */
 function BugReport() {
   return (
-    <section className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-white p-5 shadow-sm">
-      <span className="flex h-14 w-20 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-3xl">❓</span>
-      <div className="min-w-0 flex-1">
-        <div className="font-display text-[15px] font-bold">Bug Report or Feature Request</div>
-        <p className="mt-0.5 text-sm text-inkmuted">
-          Let us know what can make your {BRAND.name} experience even better.
-        </p>
+    // Phones: icon+text block on top, full-width Report button under it
+    // (same pattern as the yellow Alert). sm+: one row.
+    <section className="mt-4 flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:gap-4 sm:rounded-2xl sm:p-5">
+      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center sm:gap-4">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-2xl sm:h-14 sm:w-20 sm:text-3xl">❓</span>
+        <div className="min-w-0">
+          <div className="font-display text-[15px] font-bold">Bug Report or Feature Request</div>
+          <p className="mt-0.5 text-sm text-inkmuted">
+            Let us know what can make your {BRAND.name} experience even better.
+          </p>
+        </div>
       </div>
       <a
         href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`${BRAND.name} — bug report / feature request`)}`}
-        className="shrink-0 rounded-full border border-line px-6 py-2.5 text-sm font-bold hover:border-ink"
+        className="w-full shrink-0 rounded-full border border-line px-6 py-2.5 text-center text-sm font-bold hover:border-ink sm:w-auto"
       >
         Report
       </a>
