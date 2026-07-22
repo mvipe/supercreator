@@ -104,7 +104,7 @@ export default function BookingPage() {
           {/* LEFT — profile + sessions */}
           <div className="space-y-5">
             <div className="card overflow-hidden">
-              <div className="relative overflow-hidden px-6 pb-6 pt-8 text-center text-white" style={heroSurface({ base: "#101114", tint: "#1B2A4A", accent: "#2E6EF7", warm: "#4F46E5" })}>
+              <div className="relative overflow-hidden px-4 pb-5 pt-6 text-center text-white sm:px-6 sm:pb-6 sm:pt-8" style={heroSurface({ base: "#101114", tint: "#1B2A4A", accent: "#2E6EF7", warm: "#4F46E5" })}>
                 <div className="mx-auto h-20 w-20 overflow-hidden rounded-full border-2 border-white/40 bg-white/10 text-2xl font-bold leading-[76px]">
                   {profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : (profile.display_name || username)[0]?.toUpperCase()}
                 </div>
@@ -125,8 +125,33 @@ export default function BookingPage() {
 
             <div>
               <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-inkmuted">Choose a session</h2>
-              <div className="space-y-2">
-                {sessions.length === 0 && <div className="card p-6 text-center text-sm text-inkmuted">No sessions available right now.</div>}
+
+              {sessions.length === 0 && <div className="card p-6 text-center text-sm text-inkmuted">No sessions available right now.</div>}
+
+              {/* Phones: a native dropdown — one tap, no scrolling through
+                  cards, and the OS renders its own picker UI. */}
+              {sessions.length > 0 && (
+                <div className="lg:hidden">
+                  <select
+                    className="input w-full appearance-none bg-white py-3 font-semibold"
+                    value={picked?.id || ""}
+                    onChange={(e) => {
+                      const sess = sessions.find((x) => x.id === e.target.value);
+                      if (sess) { setPicked(sess); setDay(null); setSlot(null); setBookedOk(false); }
+                    }}
+                  >
+                    {sessions.map((sess) => (
+                      <option key={sess.id} value={sess.id}>
+                        {sess.title} — {sess.duration_min} min · {sess.price ? inr(sess.price) : "Free"}
+                      </option>
+                    ))}
+                  </select>
+                  {picked?.description && <p className="mt-2 text-sm text-inkmuted">{picked.description}</p>}
+                </div>
+              )}
+
+              {/* Desktop: the full cards */}
+              <div className="hidden space-y-2 lg:block">
                 {sessions.map((sess) => (
                   <button key={sess.id} onClick={() => { setPicked(sess); setDay(null); setSlot(null); setBookedOk(false); }}
                     className={`card w-full p-4 text-left transition-all ${picked?.id === sess.id ? "border-brand ring-2 ring-brand/20" : "hover:-translate-y-0.5"}`}>
@@ -156,14 +181,15 @@ export default function BookingPage() {
 
                 <div className="mt-5">
                   <div className="text-sm font-bold uppercase tracking-wide text-inkmuted">Pick a day</div>
-                  <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+                  {/* 7-column wrapping grid (2 week rows): fits every screen
+                      width with no horizontal scrolling anywhere. */}
+                  <div className="mt-3 grid grid-cols-7 gap-1.5 sm:gap-2">
                     {days.map(({ date, open }) => (
                       <button key={date.toISOString()} disabled={!open}
                         onClick={() => { setDay(date); setBookedOk(false); }}
-                        className={`w-16 shrink-0 rounded-xl border py-2.5 text-center text-sm transition-colors ${day?.getTime() === date.getTime() ? "border-brand bg-brand text-white" : open ? "border-line bg-white hover:border-brand" : "border-line bg-paper text-inkmuted opacity-50"}`}>
-                        <div className="text-[11px] font-semibold uppercase">{date.toLocaleDateString("en-IN", { weekday: "short" })}</div>
-                        <div className="font-display text-lg font-bold">{date.getDate()}</div>
-                        <div className="text-[10px] uppercase">{date.toLocaleDateString("en-IN", { month: "short" })}</div>
+                        className={`rounded-lg border py-2 text-center transition-colors sm:rounded-xl sm:py-2.5 ${day?.getTime() === date.getTime() ? "border-brand bg-brand text-white" : open ? "border-line bg-white hover:border-brand" : "border-line bg-paper text-inkmuted opacity-50"}`}>
+                        <div className="text-[10px] font-semibold uppercase sm:text-[11px]">{date.toLocaleDateString("en-IN", { weekday: "short" }).slice(0, 2)}</div>
+                        <div className="font-display text-base font-bold sm:text-lg">{date.getDate()}</div>
                       </button>
                     ))}
                   </div>
@@ -172,7 +198,7 @@ export default function BookingPage() {
                 {day && (
                   <div className="mt-5">
                     <div className="text-sm font-bold uppercase tracking-wide text-inkmuted">Pick a time</div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    <div className="mt-3 grid max-h-60 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
                       {slots.length === 0 && <p className="col-span-full text-sm text-inkmuted">No free slots this day — try another.</p>}
                       {slots.map((t) => (
                         <button key={t.toISOString()} onClick={() => setSlot(t.toISOString())}
@@ -184,8 +210,10 @@ export default function BookingPage() {
                   </div>
                 )}
 
-                {/* sticky on phones so Confirm never scrolls out of reach */}
-                <div className="sticky bottom-20 z-10 mt-6 rounded-xl border border-line bg-paper p-4 shadow-lg sm:static sm:border-0 sm:shadow-none md:bottom-0">
+                {/* Sticks flush to the bottom edge on phones so Confirm is
+                    always in reach; normal flow on desktop. -mx/-mb cancel the
+                    card padding so it truly touches the screen edge. */}
+                <div className="sticky bottom-0 z-10 -mx-4 mt-6 rounded-t-xl border-t border-line bg-paper p-4 shadow-[0_-6px_16px_rgba(16,17,20,0.08)] sm:static sm:mx-0 sm:rounded-xl sm:border-0 sm:shadow-none">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-inkmuted">Session</span><span className="font-semibold">{picked.title}</span>
                   </div>

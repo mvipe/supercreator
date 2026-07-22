@@ -87,7 +87,7 @@ export default function StorePublic() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden" style={{ ...themeSurface(t), fontFamily: `'${font}', sans-serif` }}>
+    <main className="relative min-h-screen" style={{ ...themeSurface(t), fontFamily: `'${font}', sans-serif` }}>
       <div className="pointer-events-none fixed inset-0 z-0" style={SHEEN} />
       <VisitTracker ownerId={profile.user_id} path={`/u/${username}`} source="store" />
       <div className="relative z-10 mx-auto max-w-xl px-4 py-12 text-center">

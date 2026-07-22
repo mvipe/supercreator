@@ -6,6 +6,14 @@ export const metadata = {
   description: "Build, price and sell your online course in minutes."
 };
 
+// Without this, phones render the page in a ~980px virtual viewport (the
+// "desktop mode" bug). The manual <head> below means we can't rely on Next
+// injecting it for us.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
@@ -20,4 +28,3 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
-
