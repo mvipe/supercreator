@@ -3,9 +3,12 @@
  * SuperCreators — landing page
  * ---------------------------------------------------------------
  * Requires: npm i framer-motion
- * Uses next/font/google (Fraunces + Inter). If you'd rather load fonts
- * in app/layout.js (recommended by Next.js), move the two font calls
- * there and just pass the class names down instead.
+ * Uses next/font/google (Fraunces + Inter + Lexend).
+ *
+ * CHANGES IN THIS VERSION:
+ *  - Footer replaced with the shared <SiteFooter /> from
+ *    @/components/LegalLayout, which links to /terms, /privacy,
+ *    /contact and /disclaimer.
  * ---------------------------------------------------------------
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +25,7 @@ import {
   useSpring,
 } from "framer-motion";
 import { useAuth } from "@/components/AuthProvider";
+import { SiteFooter } from "@/components/LegalLayout";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -348,7 +352,7 @@ function PricingCalculator() {
   const pct = Math.round(((price - 199) / (19999 - 199)) * 100);
 
   return (
-    <Reveal className="mx-auto max-w-3xl rounded-3xl border bg-white p-8 md:p-10" >
+    <Reveal className="mx-auto max-w-3xl rounded-3xl border bg-white p-8 md:p-10">
       <div style={{ borderColor: T.line }} />
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
@@ -580,7 +584,7 @@ function TestimonialMarquee() {
               VERIFIED CREATOR
             </div>
             <p className="text-sm leading-relaxed" style={{ color: T.ink }}>
-              ”{q[2]}”
+              &rdquo;{q[2]}&rdquo;
             </p>
             <div className="mt-4 text-sm font-semibold" style={{ color: T.ink }}>
               {q[0]}
@@ -781,15 +785,8 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t px-6 py-10" style={{ borderColor: T.line }}>
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm sm:flex-row" style={{ color: T.inkmuted }}>
-          <div className="font-bold" style={{ fontFamily: "var(--font-headline)", color: T.ink }}>
-            Super<span style={{ color: T.brand }}>Creators</span>
-          </div>
-          <div>© {new Date().getFullYear()} SuperCreators. All rights reserved.</div>
-        </div>
-      </footer>
+      {/* Footer — now shared across all pages */}
+      <SiteFooter />
     </main>
   );
 }
