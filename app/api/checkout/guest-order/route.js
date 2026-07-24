@@ -4,7 +4,8 @@ import { supabaseAdmin, getUserFromRequest, isBlocked } from "@/lib/supabaseAdmi
 import { productPrice } from "@/lib/products";
 
 // =============================================================
-// Guest-capable checkout for COURSES (+ one optional add-on product).
+// Guest-capable checkout for COURSES (+ one optional add-on product) and for
+// standalone PRODUCTS (book / event / locked / payment). Pass body.productType.
 //
 // Unlike /api/checkout/order this does NOT require an authenticated session:
 // a buyer can pay with just email + phone + state. We create (or reuse) an
@@ -45,6 +46,20 @@ function courseAmountPaise(course, body) {
     applied = c.code;
   }
   return { paise: Math.round(rupees * 100), applied };
+}
+
+/** Rupees->paise for a standalone product, honouring free/pwyw modes. */
+function productAmountPaise(type, d, body) {
+  if (type === "event") return d.priceMode === "free" ? 0 : Math.round((Number(d.price) || 0) * 100);
+  if (type === "locked") return Math.round((Number(d.price) || 0) * 100);
+  if (type === "book" || type === "payment") {
+    if (d.priceMode === "pwyw") {
+      const min = Number(d.minPrice) || 1;
+      return Math.round(Math.max(min, Number(body.pwywAmount) || 0) * 100);
+    }
+    return Math.round((Number(d.price) || 0) * 100);
+  }
+  return Math.round((Number(d.price) || 0) * 100);
 }
 
 /** Resolve the configured add-on product (owned by the same creator). */
@@ -89,7 +104,9 @@ export async function POST(req) {
   try {
     const body = await req.json();
     const { productId, email, phone, state, gstin, addon: wantAddon } = body;
-    if (!productId) return NextResponse.json({ error: "Missing course." }, { status: 400 });
+    const productType = body.productType || "course";
+    const isCourse = productType === "course";
+    if (!productId) return NextResponse.json({ error: "Missing product." }, { status: 400 });
 
     // Buyer identity: logged-in user if present, else a guest email account.
     const authed = await getUserFromRequest(req);
@@ -104,10 +121,23 @@ export async function POST(req) {
     }
     const buyerPhone = String(phone || authed?.user_metadata?.phone || "").replace(/\D/g, "") || null;
 
-    const { data: courseRow } = await supabaseAdmin.from("mp_courses").select("*")
-      .eq("id", productId).eq("status", "published").maybeSingle();
-    if (!courseRow) return NextResponse.json({ error: "Course not found." }, { status: 404 });
-    const ownerId = courseRow.owner_id;
+    // Load the product being bought — a course, or a standalone product.
+    let courseRow = null, productRow = null, ownerId = null, basePaise = 0, applied = null;
+    if (isCourse) {
+      const { data } = await supabaseAdmin.from("mp_courses").select("*")
+        .eq("id", productId).eq("status", "published").maybeSingle();
+      if (!data) return NextResponse.json({ error: "Course not found." }, { status: 404 });
+      courseRow = data; ownerId = data.owner_id;
+      const amt = courseAmountPaise(courseRow, body);
+      if (amt.error) return NextResponse.json({ error: amt.error }, { status: 400 });
+      basePaise = amt.paise; applied = amt.applied;
+    } else {
+      const { data } = await supabaseAdmin.from("mp_products").select("*")
+        .eq("id", productId).eq("type", productType).eq("status", "published").maybeSingle();
+      if (!data) return NextResponse.json({ error: "Product not found." }, { status: 404 });
+      productRow = data; ownerId = data.owner_id;
+      basePaise = productAmountPaise(productType, data.data || {}, body);
+    }
     if (await isBlocked(ownerId)) return NextResponse.json({ error: "This store is currently unavailable." }, { status: 403 });
 
     // Answers capture the SuperProfile-style fields for the creator's records.
@@ -118,11 +148,9 @@ export async function POST(req) {
     ];
     if (gstin) answers.push({ label: "GSTIN", value: gstin });
 
-    const { paise: coursePaise, applied, error: cErr } = courseAmountPaise(courseRow, body);
-    if (cErr) return NextResponse.json({ error: cErr }, { status: 400 });
-
-    const addon = wantAddon ? await resolveAddon(courseRow, ownerId) : null;
-    const total = coursePaise + (addon?.paise || 0);
+    // Add-ons are a course-only feature.
+    const addon = (isCourse && wantAddon) ? await resolveAddon(courseRow, ownerId) : null;
+    const total = basePaise + (addon?.paise || 0);
 
     // Commission %: same rule as the authed checkout.
     const { data: ownerProfile } = await supabaseAdmin.from("mp_profiles")
@@ -132,15 +160,17 @@ export async function POST(req) {
       .select("free_plan_commission, pro_plan_commission").maybeSingle();
     const commissionPercentage = isProOwner ? (settings?.pro_plan_commission ?? 10) : (settings?.free_plan_commission ?? 30);
 
+    const expiresAt = isCourse ? expiryForCourse(courseRow) : null;
     const meta = {
       guest: isGuest, email: buyerEmail, state: state || "", gstin: gstin || "",
+      productType,
       addon: addon ? { type: addon.type, id: addon.id, amount: addon.paise } : null,
-      courseAmount: coursePaise
+      courseAmount: basePaise
     };
 
-    // Free course + no paid add-on: grant immediately, no Razorpay.
+    // Free product + no paid add-on: grant immediately, no Razorpay.
     if (total === 0) {
-      await grantOne({ productType: "course", productId: courseRow.id, ownerId, buyerId, amount: 0, coupon: applied, buyerPhone, answers, expiresAt: expiryForCourse(courseRow), commissionPercentage });
+      await grantOne({ productType, productId, ownerId, buyerId, amount: 0, coupon: applied, buyerPhone, answers, expiresAt, commissionPercentage });
       let tokenHash = null;
       if (isGuest) {
         const link = await supabaseAdmin.auth.admin.generateLink({ type: "magiclink", email: buyerEmail });
@@ -153,7 +183,7 @@ export async function POST(req) {
     const order = await rzp.orders.create({ amount: total, currency: "INR", receipt: `mp_${Date.now()}` });
     const commissionAmount = Math.round((total * commissionPercentage) / 100);
     await supabaseAdmin.from("mp_orders").insert({
-      product_type: "course", product_id: courseRow.id, owner_id: ownerId, buyer_id: buyerId,
+      product_type: productType, product_id: productId, owner_id: ownerId, buyer_id: buyerId,
       razorpay_order_id: order.id, amount: total, coupon: applied, buyer_phone: buyerPhone,
       answers, meta, status: "created",
       commission_percentage: commissionPercentage, commission_amount: commissionAmount,

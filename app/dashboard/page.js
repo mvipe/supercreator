@@ -15,7 +15,7 @@ import { BRAND } from "@/lib/brand";
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" }).replace(/ /g, " ");
 
-const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@supercreators.app";
+const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@supercreators.in";
 
 const rangeLabel = (from, to) => `${fmtDate(from)} - ${fmtDate(to)}`;
 

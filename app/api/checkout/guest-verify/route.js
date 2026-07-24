@@ -36,18 +36,20 @@ export async function POST(req) {
     if (order.status !== "paid") {
       await supabaseAdmin.from("mp_orders").update({ status: "paid", razorpay_payment_id }).eq("id", order.id);
 
-      // Course expiry from validity.
+      // Course expiry from validity (only courses expire).
       let expiresAt = null;
-      const { data: c } = await supabaseAdmin.from("mp_courses").select("validity").eq("id", order.product_id).maybeSingle();
-      if (c?.validity?.mode === "limited") {
-        const d = new Date(); d.setDate(d.getDate() + (Number(c.validity.days) || 365));
-        expiresAt = d.toISOString();
+      if (order.product_type === "course") {
+        const { data: c } = await supabaseAdmin.from("mp_courses").select("validity").eq("id", order.product_id).maybeSingle();
+        if (c?.validity?.mode === "limited") {
+          const d = new Date(); d.setDate(d.getDate() + (Number(c.validity.days) || 365));
+          expiresAt = d.toISOString();
+        }
       }
 
-      const courseAmount = meta.courseAmount ?? (order.amount - (meta.addon?.amount || 0));
+      const baseAmount = meta.courseAmount ?? (order.amount - (meta.addon?.amount || 0));
       await grantOne({
-        productType: "course", productId: order.product_id, ownerId: order.owner_id, buyerId: order.buyer_id,
-        amount: courseAmount, coupon: order.coupon, buyerPhone: order.buyer_phone, answers: order.answers,
+        productType: order.product_type, productId: order.product_id, ownerId: order.owner_id, buyerId: order.buyer_id,
+        amount: baseAmount, coupon: order.coupon, buyerPhone: order.buyer_phone, answers: order.answers,
         orderId: order.id, expiresAt, commissionPercentage
       });
 

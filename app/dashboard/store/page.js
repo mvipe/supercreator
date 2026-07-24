@@ -98,7 +98,7 @@ export default function StorePage() {
         </nav>
         <div className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
           <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm sm:flex-none">
-            <span className="min-w-0 truncate text-inkmuted">🌐 supercreators.app{storeUrl || "/…"}</span>
+            <span className="min-w-0 truncate text-inkmuted">🌐 supercreators.in{storeUrl || "/…"}</span>
             {storeUrl && <button onClick={copyLink} className="shrink-0 text-brand">{copied ? "✓" : "⧉"}</button>}
           </div>
           {storeUrl && <a href={storeUrl} target="_blank" className="btn-ink shrink-0">Share ↗</a>}
@@ -111,7 +111,7 @@ export default function StorePage() {
           {tab === "Store" && (
             <>
               {storeUrl
-                ? <div className="card flex flex-wrap items-center gap-3 p-4"><span className="text-sm">🚀 Your store is live: <a href={storeUrl} target="_blank" className="font-semibold text-brand hover:underline">supercreators.app{storeUrl}</a></span></div>
+                ? <div className="card flex flex-wrap items-center gap-3 p-4"><span className="text-sm">🚀 Your store is live: <a href={storeUrl} target="_blank" className="font-semibold text-brand hover:underline">supercreators.in{storeUrl}</a></span></div>
                 : <div className="card p-4 text-sm text-inkmuted">Pick a username below to make your store live.</div>}
 
               <div className="card space-y-5 p-5">
@@ -209,7 +209,7 @@ export default function StorePage() {
                 <h2 className="font-display text-lg font-bold">Store details</h2>
                 <Field label="Your store's official link">
                   <div className="flex overflow-hidden rounded-[10px] border border-line">
-                    <span className="flex items-center border-r border-line bg-paper px-3 text-sm text-inkmuted">supercreators.app/u/</span>
+                    <span className="flex items-center border-r border-line bg-paper px-3 text-sm text-inkmuted">supercreators.in/u/</span>
                     <input className="w-full px-3.5 py-2.5 text-sm outline-none" value={p.username || ""} onChange={(e) => patch({ username: slugify(e.target.value) || null })} />
                   </div>
                 </Field>
@@ -224,7 +224,7 @@ export default function StorePage() {
               <div className="card space-y-5 p-5">
                 <h2 className="font-display text-lg font-bold">SEO · Custom meta</h2>
                 <Field label="Meta title"><input className="input" value={p.meta_title || ""} onChange={(e) => patch({ meta_title: e.target.value })} placeholder={p.display_name || "Your name"} /></Field>
-                <Field label="Meta description"><textarea className="input min-h-[70px]" value={p.meta_description || ""} onChange={(e) => patch({ meta_description: e.target.value })} placeholder="Welcome to my MegaProfile!" /></Field>
+                <Field label="Meta description"><textarea className="input min-h-[70px]" value={p.meta_description || ""} onChange={(e) => patch({ meta_description: e.target.value })} placeholder="Welcome to my SuperCreators store!" /></Field>
                 <p className="text-xs text-inkmuted">Note: changes to meta may take some time to appear on other platforms.</p>
               </div>
 

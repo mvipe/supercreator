@@ -278,7 +278,7 @@ export default function Bookings() {
             <div className="text-xs font-bold uppercase tracking-wide text-inkmuted">Your booking page</div>
             {bookingUrl ? (
               <>
-                <a href={bookingUrl} target="_blank" className="mt-1 block truncate text-sm font-semibold text-brand hover:underline">SuperCreators.app{bookingUrl}</a>
+                <a href={bookingUrl} target="_blank" className="mt-1 block truncate text-sm font-semibold text-brand hover:underline">supercreators.in{bookingUrl}</a>
                 <button className="btn-ghost mt-3 w-full" onClick={() => copyLink(window.location.origin + bookingUrl)}>{copied ? "Copied ✓" : "Copy link"}</button>
               </>
             ) : (
