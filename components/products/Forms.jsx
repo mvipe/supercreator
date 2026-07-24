@@ -174,11 +174,17 @@ export function BookForm({ product, patch, patchData }) {
   const [up, setUp] = useState(false);
   async function onFile(files) {
     if (!files?.[0]) return;
+    const f = files[0];
+    if (f.size > 100 * 1024 * 1024) {
+      alert("This file is over 100 MB. Upload a smaller file, or paste a Google Drive / download link instead.");
+      return;
+    }
     setUp(true);
     try {
-      const f = files[0];
       const url = await uploadImage(user.id, f);
-      patchData({ fileUrl: url, fileName: f.name });
+      patchData({ fileUrl: url, fileName: f.name, driveLink: "" });
+    } catch (e) {
+      alert("Upload failed: " + e.message);
     } finally { setUp(false); }
   }
   return (
@@ -200,10 +206,23 @@ export function BookForm({ product, patch, patchData }) {
           </select>
         </Field>
       </div>
-      <Field label="Book file" required hint="Buyers download this after paying">
+      <Field label="Book file" required hint="Buyers download this after paying · upload up to 100 MB, or paste a link">
         <div className="space-y-2">
-          {d.fileUrl && <div className="flex items-center gap-2 rounded-lg bg-paper px-3 py-2 text-sm"><span className="min-w-0 flex-1 truncate">📄 {d.fileName || "Uploaded file"}</span></div>}
+          {d.fileUrl && (
+            <div className="flex items-center gap-2 rounded-lg bg-paper px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate">{d.driveLink ? "🔗" : "📄"} {d.fileName || "Uploaded file"}</span>
+              <button type="button" className="shrink-0 text-xs font-semibold text-danger"
+                onClick={() => patchData({ fileUrl: "", fileName: "", driveLink: "" })}>Remove</button>
+            </div>
+          )}
           <label className="btn-ghost cursor-pointer">{up ? "Uploading…" : d.fileUrl ? "Replace file" : "+ Upload file"}<input type="file" className="hidden" onChange={(e) => onFile(e.target.files)} /></label>
+
+          {/* Or: a Google Drive / external download link — best for large files. */}
+          <div className="flex items-center gap-2 text-[11px] text-inkmuted"><span className="h-px flex-1 bg-line" />OR<span className="h-px flex-1 bg-line" /></div>
+          <input className="input" type="url" placeholder="Paste a Google Drive / download link (https://…)"
+            value={d.driveLink || ""}
+            onChange={(e) => { const v = e.target.value.trim(); patchData({ driveLink: v, fileUrl: v, fileName: v ? "Download link" : "" }); }} />
+          <p className="text-[11px] text-inkmuted">For Google Drive, set sharing to “Anyone with the link”. Use a link for files over 100 MB.</p>
         </div>
       </Field>
       <div className="flex gap-3">

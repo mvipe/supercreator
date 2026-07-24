@@ -35,7 +35,7 @@ export default function StorePreview({ profile, links = [], hasSessions = false,
         {creatorName && profile.username && (
           <div className="mt-0.5 text-xs opacity-70" style={{ color: t.sub }}>@{profile.username}</div>
         )}
-        <div className="mt-1 text-sm" style={{ color: t.sub }}>{profile.bio || "Welcome to my MegaProfile 🚀"}</div>
+        <div className="mt-1 text-sm" style={{ color: t.sub }}>{profile.bio || "Welcome to my SuperCreators store 🚀"}</div>
 
         {/* real brand marks, matching the live store (was a letter in a box) */}
         <div className="mt-3 flex flex-wrap justify-center gap-2">

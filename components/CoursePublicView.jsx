@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { inr, lessonCount, effectivePrice, ytEmbed } from "@/lib/courseModel";
 import { BuiltWithLink, CreatorChip } from "@/components/Branding";
+import { INDIAN_STATES } from "@/lib/india";
 
 /**
  * Themed course sales page. Used inside the editor's live preview and on /c/[slug].
@@ -16,14 +17,6 @@ const LESSON_GLYPH = {
   assignment: "📝"
 };
 
-const INDIAN_STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
-  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
-  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
-  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand",
-  "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
-  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
-];
 
 export default function CoursePublicView({ course, mode = "live", onBuy, onPreviewLesson, compact = false, creator = null, user = null, addon = null, busy = false, error = "", owned = false }) {
   const [slide, setSlide] = useState(0);
@@ -398,7 +391,7 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
           </div>
         </div>
 
-        <p className="mt-12 text-center text-[11px]" style={{ color: muted }}>Built with MegaProfile</p>
+        <p className="mt-12 text-center text-[11px]" style={{ color: muted }}>Built with SuperCreators</p>
       </div>
 
       {/* Mobile sticky CTA — always in reach; tapping scrolls to the inline form.

@@ -21,7 +21,9 @@ function newLesson(type, n) {
   if (type === "video") return { ...base, videoUrl: "", text: "" };
   if (type === "text") return { ...base, text: "", images: [] };
   if (type === "audio") return { ...base, audioUrl: "", text: "" };
-  if (type === "quiz") return { ...base, title: "", quizTitle: `Quiz ${n}`, questions: [{ id: uid(), q: "", image: "", options: [{ id: uid(), text: "", image: "", correct: true }, { id: uid(), text: "", image: "", correct: false }] }] };
+  // Start with no questions — the builder shows a "Create first question"
+  // empty state instead of dumping a pre-made blank question on the creator.
+  if (type === "quiz") return { ...base, title: "", quizTitle: `Quiz ${n}`, questions: [] };
   if (type === "assignment") return { ...base, prompt: "", allowUpload: true };
   // allowDownload defaults OFF — protecting notes is the whole point of the
   // type, so opting IN to downloads should be a deliberate choice.

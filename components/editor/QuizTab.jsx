@@ -12,16 +12,8 @@ export default function QuizTab({ course, patch }) {
   const quizzes = course.modules?.filter((m) => m.type === "quiz") || [];
 
   const addQuiz = () => {
-    const initialQuestion = {
-      id: uid(),
-      type: "single-choice",
-      question: "",
-      options: ["Option A", "Option B"],
-      correctAnswer: 0,
-      correctAnswers: [],
-      explanation: ""
-    };
-
+    // Start with no questions — the creator adds the first one deliberately
+    // instead of the form opening with a pre-made blank question.
     setFormData({
       id: uid(),
       title: "New Quiz",
@@ -30,9 +22,9 @@ export default function QuizTab({ course, patch }) {
       timeLimit: 0,
       shuffleQuestions: false,
       showAnswers: true,
-      questions: [initialQuestion]
+      questions: []
     });
-    setExpandedQuestions({ [initialQuestion.id]: true });
+    setExpandedQuestions({});
     setShowQuizForm(true);
     setEditingQuizId(null);
   };

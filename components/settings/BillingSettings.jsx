@@ -84,7 +84,7 @@ export default function BillingSettings() {
         notes: isSub ? "Subscription payment for SuperCreators Pro." : undefined
       },
       // For your own billing, SuperCreators is the seller and you're the buyer.
-      seller: { business: "SuperCreators", name: "SuperCreators", email: "support@SuperCreators.app" }
+      seller: { business: "SuperCreators", name: "SuperCreators", email: "support@supercreators.in" }
     });
   }
 

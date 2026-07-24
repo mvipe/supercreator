@@ -45,7 +45,8 @@ export default function PublicProductPage({ type, View }) {
   const d = product.data || {};
 
   function onBuy() {
-    if (!user) { r.push(`/login?next=${path}`); return; }
+    // No login wall — guests can buy with email + phone + state, just like the
+    // course checkout. Owners of a one-time product don't re-buy.
     if (owned && type !== "payment") return;
     setCheckout(true);
   }
@@ -77,7 +78,7 @@ export default function PublicProductPage({ type, View }) {
         <div className="sticky top-0 z-40 bg-teal px-4 py-2 text-center text-sm font-semibold text-white">Payment received. Thank you!</div>
       )}
       <View product={product} mode="live" onBuy={onBuy} unlocked={unlocked} owned={owned} registered={showEventAccess} />
-      {checkout && user && (
+      {checkout && (
         <CheckoutModal productType={type} productId={product.id} title={product.title} accent={d.accent}
           price={priceInfo} user={user}
           onClose={() => setCheckout(false)}

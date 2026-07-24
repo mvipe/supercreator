@@ -132,7 +132,7 @@ export default function EditorShell({ type, backHref, Form, View }) {
         </footer>
       </div>
       <div className="hidden min-w-0 flex-1 lg:block">
-        <PreviewFrame url={`SuperCreators.app${TYPE_META[type].publicPath}/${product.slug || "your-page"}`}>
+        <PreviewFrame url={`supercreators.in${TYPE_META[type].publicPath}/${product.slug || "your-page"}`}>
           <View product={product} mode="preview" />
         </PreviewFrame>
       </div>

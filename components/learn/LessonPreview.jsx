@@ -88,13 +88,15 @@ function Body({ lesson, type, courseId, accent }) {
 }
 
 /**
- * Playable quiz taster: answer questions, see if you're right — but this is a
- * sales page, so nothing is scored or saved.
+ * Playable quiz taster: answer every question, then see a score summary on
+ * completion. It's a sales page, so nothing is saved — but the learner gets the
+ * full "take the quiz and see how you did" experience.
  */
 function QuizPreview({ lesson, accent }) {
   const questions = lesson.questions || [];
   const [i, setI] = useState(0);
-  const [picked, setPicked] = useState(null);
+  const [answers, setAnswers] = useState({}); // { [questionIndex]: optionIndex }
+  const [finished, setFinished] = useState(false);
 
   if (!questions.length) {
     return (
@@ -106,19 +108,57 @@ function QuizPreview({ lesson, accent }) {
     );
   }
 
+  const isCorrect = (q, pick) => pick != null && (q.options || [])[pick]?.correct;
+
+  // Results screen — shown once the last question is answered and submitted.
+  if (finished) {
+    const correct = questions.reduce((n, q, idx) => n + (isCorrect(q, answers[idx]) ? 1 : 0), 0);
+    const pct = Math.round((correct / questions.length) * 100);
+    const pass = pct >= 60;
+    return (
+      <div className="py-4 text-center">
+        <div className="text-4xl">{pass ? "🎉" : "📚"}</div>
+        <h3 className="mt-2 font-display text-2xl font-bold">You scored {correct} / {questions.length}</h3>
+        <p className="mt-1 text-sm text-inkmuted">{pct}% correct{pass ? " — nicely done!" : " — enrol to master the rest."}</p>
+        <div className="mx-auto mt-4 h-2.5 max-w-xs overflow-hidden rounded-full bg-paper">
+          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: accent }} />
+        </div>
+
+        {/* per-question review */}
+        <div className="mt-5 space-y-2 text-left">
+          {questions.map((q, idx) => {
+            const ok = isCorrect(q, answers[idx]);
+            return (
+              <div key={q.id || idx} className="flex items-start gap-2.5 rounded-xl border border-line p-3 text-sm">
+                <span className={`mt-0.5 shrink-0 font-bold ${ok ? "text-teal" : "text-danger"}`}>{ok ? "✓" : "✕"}</span>
+                <span className="min-w-0 flex-1">{q.q || q.question || `Question ${idx + 1}`}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <button onClick={() => { setAnswers({}); setI(0); setFinished(false); }}
+          className="btn mt-5 text-sm text-white" style={{ background: accent }}>↻ Try again</button>
+      </div>
+    );
+  }
+
   const q = questions[i];
   const text = q.q || q.question || "";
   const options = q.options || [];
+  const picked = answers[i] ?? null;
   const answered = picked !== null;
+  const isLast = i === questions.length - 1;
 
-  const next = () => { setPicked(null); setI((v) => Math.min(v + 1, questions.length - 1)); };
-  const prev = () => { setPicked(null); setI((v) => Math.max(v - 1, 0)); };
+  const pick = (j) => { if (!answered) setAnswers((a) => ({ ...a, [i]: j })); };
+  const next = () => { if (isLast) setFinished(true); else setI((v) => v + 1); };
+  const prev = () => setI((v) => Math.max(v - 1, 0));
 
   return (
     <div>
       <div className="flex items-center justify-between text-xs text-inkmuted">
         <span>Question {i + 1} of {questions.length}</span>
-        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold">Practice — not scored</span>
+        <span className="rounded-full bg-paper px-2 py-0.5 font-semibold">Practice quiz</span>
       </div>
 
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-paper">
@@ -134,7 +174,7 @@ function QuizPreview({ lesson, accent }) {
           const show = answered && (o.correct || isPicked);
           const good = o.correct;
           return (
-            <button key={o.id || j} onClick={() => !answered && setPicked(j)} disabled={answered}
+            <button key={o.id || j} onClick={() => pick(j)} disabled={answered}
               className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left text-sm transition-colors ${
                 show ? (good ? "border-teal bg-teal-soft" : "border-danger bg-red-50") : "border-line hover:border-brand/50"
               } ${answered ? "cursor-default" : ""}`}>
@@ -155,8 +195,9 @@ function QuizPreview({ lesson, accent }) {
       <div className="mt-4 flex items-center justify-between">
         <button onClick={prev} disabled={i === 0} className="btn-ghost text-sm disabled:opacity-40">← Previous</button>
         {answered
-          ? <button onClick={next} disabled={i === questions.length - 1}
-              className="btn text-sm text-white disabled:opacity-40" style={{ background: accent }}>Next question →</button>
+          ? <button onClick={next} className="btn text-sm text-white" style={{ background: accent }}>
+              {isLast ? "See results →" : "Next question →"}
+            </button>
           : <span className="text-xs text-inkmuted">Pick an answer to see the solution</span>}
       </div>
     </div>
