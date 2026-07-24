@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { Field, RadioCard, SectionCard, Switch } from "@/components/ui";
 import { slugify, uid } from "@/lib/courseModel";
 
@@ -14,6 +15,24 @@ export default function SettingsTab({ course, patch }) {
   const st = course.settings;
   const set = (p) => patch({ settings: { ...st, ...p } });
   const [couponDraft, setCouponDraft] = useState({ code: "", percentOff: 10 });
+
+  // Candidates for the checkout add-on: the creator's OWN other published
+  // courses and products (never this same course).
+  const [addonItems, setAddonItems] = useState([]);
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const [{ data: courses }, { data: products }] = await Promise.all([
+        supabase.from("mp_courses").select("id,title").eq("owner_id", user.id).eq("status", "published"),
+        supabase.from("mp_products").select("id,type,title").eq("owner_id", user.id).eq("status", "published")
+      ]);
+      setAddonItems([
+        ...(courses || []).filter((c) => c.id !== course.id).map((c) => ({ type: "course", id: c.id, title: c.title })),
+        ...(products || []).map((p) => ({ type: p.type, id: p.id, title: p.title }))
+      ]);
+    })();
+  }, [course.id]);
 
   return (
     <div className="space-y-8">
@@ -114,6 +133,28 @@ export default function SettingsTab({ course, patch }) {
             <button className="btn-ghost shrink-0" type="submit">+ Add</button>
           </form>
         </div>
+      </div>
+
+      {/* Checkout add-on (order bump) */}
+      <div>
+        <h2 className="font-display text-xl font-bold">Checkout add-on</h2>
+        <p className="mt-1 text-sm text-inkmuted">Offer one of your other products as an add-on on this course's checkout. Buyers can add it with a single tap — and pay for both together.</p>
+        {addonItems.length === 0 ? (
+          <p className="mt-3 text-sm text-inkmuted">Publish another course or product first to offer it as an add-on.</p>
+        ) : (
+          <select className="input mt-3" value={st.addon ? `${st.addon.type}:${st.addon.id}` : ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) { set({ addon: null }); return; }
+              const [type, id] = v.split(":");
+              set({ addon: { type, id } });
+            }}>
+            <option value="">No add-on</option>
+            {addonItems.map((it) => (
+              <option key={`${it.type}:${it.id}`} value={`${it.type}:${it.id}`}>{it.title} · {it.type}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Post purchase */}

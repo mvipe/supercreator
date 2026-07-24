@@ -5,8 +5,9 @@ function Shell({ accent = "#2E6EF7", children }) {
   return (
     <div className="min-h-full bg-white text-ink">
       <div style={{ background: accent }} className="h-1.5 w-full" />
-      <div className="mx-auto max-w-3xl px-4 pb-16 pt-6 sm:px-8">{children}</div>
-      <p className="pb-6 text-center text-[11px] text-inkmuted">Built with SuperCreators</p>
+      {/* extra bottom room on mobile so the sticky CTA bar never covers content */}
+      <div className="mx-auto max-w-3xl px-4 pb-28 pt-6 sm:px-8 sm:pb-16">{children}</div>
+      <p className="pb-24 text-center text-[11px] text-inkmuted sm:pb-6">Built with SuperCreators</p>
     </div>
   );
 }
@@ -16,16 +17,32 @@ function Label({ accent, children }) {
 function Cover({ images = [], video }) {
   const embed = ytEmbed(video);
   if (embed) return <div className="aspect-video overflow-hidden rounded-2xl border border-line"><iframe src={embed} className="h-full w-full" allowFullScreen title="video" /></div>;
-  if (images[0]) return <img src={images[0]} alt="" className="aspect-video w-full rounded-2xl border border-line object-cover" />;
+  // Images show in full (any aspect ratio), letterboxed rather than cropped.
+  if (images[0]) return (
+    <div className="flex w-full items-center justify-center overflow-hidden rounded-2xl border border-line bg-paper">
+      <img src={images[0]} alt="" className="max-h-[70vh] w-full object-contain sm:max-h-[520px]" />
+    </div>
+  );
   return null;
 }
 function Cta({ accent, label, onClick, mode }) {
-  return (
+  const btn = (
     <button onClick={mode === "live" ? onClick : undefined}
-      className="mt-6 flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-sm font-bold text-white hover:opacity-90"
+      className="flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-sm font-bold text-white hover:opacity-90"
       style={{ background: accent, cursor: mode === "preview" ? "default" : "pointer" }}>
       {label} <span>→</span>
     </button>
+  );
+  return (
+    <>
+      {/* tablet/desktop: inline in the content flow */}
+      <div className="mt-6 hidden sm:block">{btn}</div>
+      {/* mobile: pinned to the bottom so it's always in reach; tapping opens the
+          checkout form. Only in the live page, never the editor preview. */}
+      {mode === "live"
+        ? <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-4 py-3 shadow-[0_-6px_16px_rgba(0,0,0,0.08)] backdrop-blur sm:hidden">{btn}</div>
+        : <div className="mt-6 sm:hidden">{btn}</div>}
+    </>
   );
 }
 
@@ -127,10 +144,10 @@ export function BookView({ product, mode = "live", onBuy, owned = false }) {
   const accent = d.accent || "#2E6EF7";
   return (
     <Shell accent={accent}>
-      <div className="grid gap-6 sm:grid-cols-[200px_1fr]">
-        <div className="mx-auto w-[180px] overflow-hidden rounded-xl border border-line shadow-lg sm:mx-0">
+      <div className="grid gap-6 sm:grid-cols-[260px_1fr]">
+        <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-xl border border-line shadow-lg sm:mx-0">
           {d.coverImages?.[0]
-            ? <img src={d.coverImages[0]} alt="" className="aspect-[3/4] w-full object-cover" />
+            ? <img src={d.coverImages[0]} alt="" className="block h-auto w-full" />
             : <div className="flex aspect-[3/4] items-center justify-center bg-gradient-to-br from-brand to-brand-dark text-white"><span className="text-4xl">📕</span></div>}
         </div>
         <div>
@@ -142,11 +159,17 @@ export function BookView({ product, mode = "live", onBuy, owned = false }) {
             <span className="pill" style={{ background: "#EAF1FE", color: accent }}>{d.priceMode === "free" ? "Free" : inr(d.priceMode === "pwyw" ? d.minPrice : d.price)}</span>
           </div>
           <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed">{d.description}</p>
-          {owned && d.fileUrl ? (
-            <a href={d.fileUrl} target="_blank" download={d.fileName || true}
-              className="mt-6 flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-sm font-bold text-white hover:opacity-90" style={{ background: accent }}>
-              Download your book <span>↓</span>
-            </a>
+          {owned ? (
+            d.fileUrl ? (
+              <a href={d.fileUrl} target="_blank" download={d.fileName || true}
+                className="mt-6 flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-sm font-bold text-white hover:opacity-90" style={{ background: accent }}>
+                Download your book <span>↓</span>
+              </a>
+            ) : (
+              <div className="mt-6 rounded-xl border border-line bg-paper px-4 py-3.5 text-sm font-semibold text-inkmuted">
+                ✓ You own this book — the download will appear here once the creator uploads the file.
+              </div>
+            )
           ) : (
             <Cta accent={accent} label={d.buttonText || "Buy & download"} onClick={onBuy} mode={mode} />
           )}
@@ -155,4 +178,3 @@ export function BookView({ product, mode = "live", onBuy, owned = false }) {
     </Shell>
   );
 }
-

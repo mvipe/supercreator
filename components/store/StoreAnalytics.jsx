@@ -23,7 +23,7 @@ function Toggle({ options, value, onChange, size = "sm" }) {
         const label = o.label ?? o;
         return (
           <button key={id} onClick={() => onChange(id)}
-            className={`rounded-full px-3 py-1.5 font-semibold transition-colors ${
+            className={`rounded-full px-3 py-1.5 font-semibold transition-all duration-200 ease-out ${
               value === id ? "bg-brand text-white shadow-sm" : "text-inkmuted hover:text-ink"
             }`}>
             {label}
@@ -251,8 +251,13 @@ function TrendChart({ series, bucket }) {
 
 /* ---------------- page ---------------- */
 
+// Default the custom picker to the last 7 days, in yyyy-mm-dd for <input type=date>.
+const isoDay = (d) => new Date(d).toISOString().slice(0, 10);
+
 export default function StoreAnalytics() {
   const [range, setRange] = useState("30d");
+  const [customFrom, setCustomFrom] = useState(isoDay(Date.now() - 6 * 86400000));
+  const [customTo, setCustomTo] = useState(isoDay(Date.now()));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -269,12 +274,17 @@ export default function StoreAnalytics() {
   const [locMetric, setLocMetric] = useState("visits");
 
   useEffect(() => {
+    let q = `/api/store/analytics?range=${range}&t=${Date.now()}`;
+    if (range === "custom") {
+      if (!customFrom || !customTo) return; // wait until both dates are chosen
+      q += `&from=${customFrom}&to=${customTo}`;
+    }
     setLoading(true); setErr("");
-    apiFetch(`/api/store/analytics?range=${range}&t=${Date.now()}`, undefined, "GET")
+    apiFetch(q, undefined, "GET")
       .then(setData)
       .catch((e) => setErr(e.message))
       .finally(() => setLoading(false));
-  }, [range]);
+  }, [range, customFrom, customTo]);
 
   const referrerRows = useMemo(() => {
     if (!data) return [];
@@ -313,9 +323,34 @@ export default function StoreAnalytics() {
           <h2 className="font-display text-xl font-bold">Store analytics</h2>
           <p className="text-sm text-inkmuted">Where your visitors come from, and what they do.</p>
         </div>
-        <Toggle options={RANGES.map((r) => ({ id: r.id, label: r.label }))} value={range} onChange={setRange} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Toggle options={RANGES.map((r) => ({ id: r.id, label: r.label }))} value={range} onChange={setRange} />
+          {range === "custom" && (
+            <div className="flex items-center gap-1.5 text-xs text-inkmuted">
+              <input type="date" value={customFrom} max={customTo || undefined}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-lg border border-line bg-white px-2 py-1.5 text-ink" />
+              <span>→</span>
+              <input type="date" value={customTo} min={customFrom || undefined} max={isoDay(Date.now())}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-lg border border-line bg-white px-2 py-1.5 text-ink" />
+            </div>
+          )}
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-inkmuted">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              Updating…
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* Data area fades gently while a new range loads, so switching filters
+          feels smooth instead of blanking out and snapping back. */}
+      <div className={`space-y-4 transition-opacity duration-300 ${loading ? "opacity-40" : "opacity-100"}`} aria-busy={loading}>
       {data.warnings?.map((w) => (
         <div key={w} className="rounded-[8px] border border-[#F5D48A] bg-[#FEF3C7] p-3 text-sm text-[#92600A]">{w}</div>
       ))}
@@ -394,6 +429,7 @@ export default function StoreAnalytics() {
         <Card title="Top pages">
           <BarList rows={data.pages.map((d) => ({ key: d.key, value: d.total }))} />
         </Card>
+      </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { inr, lessonCount, effectivePrice, ytEmbed } from "@/lib/courseModel";
 import { BuiltWithLink, CreatorChip } from "@/components/Branding";
 
@@ -16,9 +16,29 @@ const LESSON_GLYPH = {
   assignment: "📝"
 };
 
-export default function CoursePublicView({ course, mode = "live", onBuy, onPreviewLesson, compact = false, creator = null }) {
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
+  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh",
+  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand",
+  "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+];
+
+export default function CoursePublicView({ course, mode = "live", onBuy, onPreviewLesson, compact = false, creator = null, user = null, addon = null, busy = false, error = "", owned = false }) {
   const [slide, setSlide] = useState(0);
   const [faqOpen, setFaqOpen] = useState(null);
+  // Inline checkout form (SuperProfile-style: buy without an account). Shared by
+  // the mobile and desktop buy cards so both stay in sync.
+  const [form, setForm] = useState({
+    email: user?.email || "",
+    phone: user?.user_metadata?.phone || "",
+    state: "",
+    gstin: "",
+    addon: false,
+    pwyw: Math.max(course.pricing?.minPrice || 99, 99)
+  });
+  const setF = (patch) => setForm((f) => ({ ...f, ...patch }));
   const s = course.sections || {};
   const st = course.settings || {};
   const dark = st.theme === "dark";
@@ -37,6 +57,139 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
 
   const validityLabel = course.validity?.mode === "limited" ? `${course.validity.days}-day access` : "Lifetime access";
 
+  // Mobile sticky CTA: show a pinned "Get it now" bar until the buy form is
+  // actually on screen (then hide it so it doesn't cover the form's own button).
+  const [formInView, setFormInView] = useState(false);
+  useEffect(() => {
+    if (mode !== "live" || compact) return;
+    const el = document.getElementById("course-buy");
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setFormInView(e.isIntersecting), { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mode, compact]);
+
+  function jumpToForm() {
+    if (owned) { onBuy?.(null); return; }
+    const el = document.getElementById("course-buy");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => el?.querySelector("input[type=email]")?.focus(), 450);
+  }
+
+  const isFree = course.pricing?.mode === "free";
+  const isPwyw = course.pricing?.mode === "pwyw";
+  const inputStyle = { borderColor: border, background: dark ? "#141414" : "#fff", color: text };
+  const inputCls = "w-full rounded-[10px] border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-black/5";
+
+  /** The buy card + inline checkout. Rendered once for mobile and once for desktop. */
+  function BuyCard() {
+    const base = isPwyw ? Number(form.pwyw) || 0 : price;
+    const addonPrice = addon && form.addon ? Number(addon.price) || 0 : 0;
+    const total = base + addonPrice;
+    const preview = mode === "preview";
+
+    function submit(e) {
+      e.preventDefault();
+      if (preview) return;
+      onBuy?.(form);
+    }
+
+    return (
+      <div className="rounded-2xl border p-5 shadow-sm" style={{ borderColor: border, background: cardBg }}>
+        <ul className="space-y-2.5 text-sm">
+          <InfoRow icon="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z" text={`${lessonCount(course)} in-depth lessons`} muted={muted} />
+          <InfoRow icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" text={validityLabel} muted={muted} />
+          {st.certificate && <InfoRow icon="M12 15l-3.5 2 1-3.9L6 10.5l4-.3L12 6l2 4.2 4 .3-3.5 2.6 1 3.9z" text="Completion certificate" muted={muted} />}
+          <li className="pt-1 font-display text-2xl font-bold">
+            {isFree ? "Free" : (
+              <>
+                {inr(price)}{" "}
+                {showStrike && <span className="text-base font-normal line-through" style={{ color: muted }}>{inr(original)}</span>}
+                {isPwyw && <span className="text-sm font-normal" style={{ color: muted }}> or more — you decide</span>}
+              </>
+            )}
+          </li>
+        </ul>
+
+        {owned ? (
+          <button onClick={() => mode === "live" && onBuy?.(null)}
+            className="mt-4 flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
+            style={{ background: accent }}>
+            Continue learning <span>→</span>
+          </button>
+        ) : (
+          <form onSubmit={submit} className="mt-4 space-y-3">
+            {!user && <p className="text-xs" style={{ color: muted }}>Access to this purchase will be sent to this email</p>}
+            <input className={inputCls} style={inputStyle} type="email" required placeholder="Email address"
+              value={form.email} onChange={(e) => setF({ email: e.target.value })} />
+            <div className="flex items-stretch overflow-hidden rounded-[10px] border" style={{ borderColor: border }}>
+              <span className="flex items-center px-3 text-sm" style={{ background: dark ? "#2a2a2a" : "#F4F1EA", color: muted }}>+91</span>
+              <input className="flex-1 bg-transparent px-3 py-2.5 text-sm outline-none" style={{ color: text }} type="tel" required
+                placeholder="Phone number" value={form.phone} onChange={(e) => setF({ phone: e.target.value })} />
+            </div>
+            <input className={inputCls} style={inputStyle} type="text" placeholder="GSTIN (optional)"
+              value={form.gstin} onChange={(e) => setF({ gstin: e.target.value })} />
+            <div className="relative">
+              <select
+                className={`${inputCls} cursor-pointer appearance-none pr-10`}
+                style={inputStyle} required value={form.state}
+                onChange={(e) => setF({ state: e.target.value })}>
+                <option value="" style={{ color: "#6B675C" }}>Select State</option>
+                {INDIAN_STATES.map((s2) => <option key={s2} value={s2} style={{ color: "#17150F" }}>{s2}</option>)}
+              </select>
+              {/* custom down-chevron so the native arrow doesn't clash with the theme */}
+              <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ color: muted }}>
+                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            {isPwyw && (
+              <input className={inputCls} style={inputStyle} type="number" min={course.pricing?.minPrice || 99}
+                value={form.pwyw} onChange={(e) => setF({ pwyw: e.target.value })} placeholder="Amount" />
+            )}
+
+            {addon && (
+              <label className="flex cursor-pointer gap-3 rounded-xl border p-3"
+                style={{ borderColor: form.addon ? accent : border, background: form.addon ? `${accent}12` : "transparent" }}>
+                <input type="checkbox" className="mt-1 shrink-0" checked={form.addon} onChange={(e) => setF({ addon: e.target.checked })} />
+                {addon.img && <img src={addon.img} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />}
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold leading-snug">{addon.title}</span>
+                  {addon.subtitle && <span className="mt-0.5 block text-xs" style={{ color: muted }}>{addon.subtitle}</span>}
+                  <span className="mt-1 block text-sm font-bold">
+                    {inr(Number(addon.price) || 0)}{" "}
+                    {Number(addon.mrp) > Number(addon.price) && <span className="text-xs font-normal line-through" style={{ color: muted }}>{inr(addon.mrp)}</span>}
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
+
+            <button type="submit" disabled={busy || preview}
+              className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              style={{ background: accent, cursor: preview ? "default" : "pointer" }}>
+              {busy ? "Processing…" : (
+                <>
+                  <span>{course.buttonText || (isFree ? "Get for free" : "ENROLL NOW")}</span>
+                  <span>{isFree ? "→" : `${inr(total)} →`}</span>
+                </>
+              )}
+            </button>
+            <p className="text-center text-[11px]" style={{ color: muted }}>Secure payment via Razorpay · no account needed</p>
+          </form>
+        )}
+
+        {mode === "live" && (
+          <button type="button" onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
+            className="mt-3 w-full rounded-xl border px-4 py-2.5 text-xs font-semibold" style={{ borderColor: border, color: muted }}>
+            🔗 Copy link — invite your network
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: pageBg, color: text }} className="min-h-full">
       {/* top strip */}
@@ -51,17 +204,22 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
         </div>
       )}
 
-      <div className={`mx-auto ${compact ? "max-w-full px-4" : "max-w-5xl px-4 sm:px-8"} pb-16 pt-6`}>
+      <div className={`mx-auto ${compact ? "max-w-full px-4" : "max-w-5xl px-4 sm:px-8"} pt-6 ${mode === "live" && !compact ? "pb-28 lg:pb-16" : "pb-16"}`}>
         <div className={`grid gap-8 ${compact ? "" : "lg:grid-cols-[1fr_320px]"}`}>
           {/* Main column */}
           <div className="min-w-0">
-            {/* Cover */}
+            {/* Cover — images show in full (any aspect ratio), letterboxed on a
+                neutral backdrop rather than cropped to 16:9. Video keeps 16:9. */}
             {(covers.length > 0 || embed) && (
               <div className="relative overflow-hidden rounded-2xl border" style={{ borderColor: border }}>
                 {embed && slide === 0 ? (
                   <div className="aspect-video w-full"><iframe src={embed} className="h-full w-full" allowFullScreen title="Course video" /></div>
                 ) : (
-                  covers.length > 0 && <img src={covers[embed ? slide - 1 : slide]} alt="" className="aspect-video w-full object-cover" />
+                  covers.length > 0 && (
+                    <div className="flex w-full items-center justify-center" style={{ background: dark ? "#0f0f0f" : "#F4F1EA" }}>
+                      <img src={covers[embed ? slide - 1 : slide]} alt="" className="max-h-[70vh] w-full object-contain sm:max-h-[520px]" />
+                    </div>
+                  )
                 )}
                 {(covers.length + (embed ? 1 : 0)) > 1 && (
                   <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
@@ -75,6 +233,12 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
             )}
 
             <h1 className="mt-6 font-display text-3xl font-bold sm:text-4xl">{course.title}</h1>
+
+            {/* Mobile: the buy card sits directly under the cover/title, not at
+                the very bottom of the page. Desktop keeps it in the sticky column. */}
+            <div id="course-buy" className="mt-6 scroll-mt-4 lg:hidden">
+              {BuyCard()}
+            </div>
 
             {/* About */}
             <div className="mt-5">
@@ -228,41 +392,28 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
             )}
           </div>
 
-          {/* Buy card */}
-          <div className={compact ? "" : "lg:sticky lg:top-6 lg:self-start"}>
-            <div className="rounded-2xl border p-5 shadow-sm" style={{ borderColor: border, background: cardBg }}>
-              <ul className="space-y-2.5 text-sm">
-                <InfoRow icon="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z" text={`${lessonCount(course)} in-depth lessons`} muted={muted} />
-                <InfoRow icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" text={validityLabel} muted={muted} />
-                {st.certificate && <InfoRow icon="M12 15l-3.5 2 1-3.9L6 10.5l4-.3L12 6l2 4.2 4 .3-3.5 2.6 1 3.9z" text="Completion certificate" muted={muted} />}
-                <li className="pt-1 font-display text-2xl font-bold">
-                  {course.pricing?.mode === "free" ? "Free" : (
-                    <>
-                      {inr(price)}{" "}
-                      {showStrike && <span className="text-base font-normal line-through" style={{ color: muted }}>{inr(original)}</span>}
-                      {course.pricing?.mode === "pwyw" && <span className="text-sm font-normal" style={{ color: muted }}> or more — you decide</span>}
-                    </>
-                  )}
-                </li>
-              </ul>
-              <button
-                onClick={mode === "live" ? onBuy : undefined}
-                className="mt-4 flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-                style={{ background: accent, cursor: mode === "preview" ? "default" : "pointer" }}>
-                {course.buttonText || "ENROLL NOW"} <span>→</span>
-              </button>
-              {mode === "live" && (
-                <button onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
-                  className="mt-3 w-full rounded-xl border px-4 py-2.5 text-xs font-semibold" style={{ borderColor: border, color: muted }}>
-                  🔗 Copy link — invite your network
-                </button>
-              )}
-            </div>
+          {/* Buy card — desktop sticky column (mobile copy renders under the title). */}
+          <div className={`hidden lg:block ${compact ? "" : "lg:sticky lg:top-6 lg:self-start"}`}>
+            {BuyCard()}
           </div>
         </div>
 
         <p className="mt-12 text-center text-[11px]" style={{ color: muted }}>Built with MegaProfile</p>
       </div>
+
+      {/* Mobile sticky CTA — always in reach; tapping scrolls to the inline form.
+          Hidden once the form itself is on screen, and on desktop. */}
+      {mode === "live" && !compact && !formInView && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t px-4 py-3 shadow-[0_-6px_16px_rgba(0,0,0,0.08)] lg:hidden"
+          style={{ background: cardBg, borderColor: border }}>
+          <button onClick={jumpToForm}
+            className="flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-sm font-bold text-white"
+            style={{ background: accent }}>
+            <span>{owned ? "Continue learning" : (course.buttonText || (isFree ? "Get for free" : "Get it now"))}</span>
+            <span>{owned || isFree ? "→" : `${inr(price)} →`}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
