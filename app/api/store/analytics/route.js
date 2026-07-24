@@ -55,11 +55,33 @@ export async function GET(req) {
 
     const url = new URL(req.url);
     const range = url.searchParams.get("range") || "30d";
-    const days = rangeDays(range);
-    const bucket = bucketFor(range);
 
-    const to = new Date();
-    const from = days ? new Date(to.getTime() - days * 86400000) : new Date("2020-01-01");
+    // Resolve the [from, to] window. Most ranges are a rolling N-day window;
+    // "yesterday" is the previous calendar day; "custom" takes explicit bounds.
+    let from, to, bucket;
+    if (range === "yesterday") {
+      const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - 1);
+      const end = new Date(start); end.setDate(end.getDate() + 1);
+      from = start; to = end; bucket = bucketFor("yesterday");
+    } else if (range === "custom") {
+      const fp = url.searchParams.get("from");
+      const tp = url.searchParams.get("to");
+      const start = fp ? new Date(fp) : new Date(Date.now() - 30 * 86400000);
+      const end = tp ? new Date(tp) : new Date();
+      if (isNaN(start) || isNaN(end)) return NextResponse.json({ error: "Invalid custom date range." }, { status: 400 });
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      from = start <= end ? start : end;
+      to = start <= end ? end : start;
+      const spanDays = Math.max(1, Math.round((to - from) / 86400000));
+      bucket = bucketFor("custom", spanDays);
+    } else {
+      const days = rangeDays(range);
+      bucket = bucketFor(range);
+      to = new Date();
+      from = days ? new Date(to.getTime() - days * 86400000) : new Date("2020-01-01");
+    }
+    const bounded = range !== "all";
 
     let vq = supabaseAdmin.from("mp_visits")
       .select("visitor_id, source, referrer_host, country_code, country, city, device, browser, path, created_at")
@@ -70,11 +92,12 @@ export async function GET(req) {
     let pq = supabaseAdmin.from("mp_purchases")
       .select("amount, creator_amount, created_at").eq("owner_id", user.id);
 
-    if (days) {
-      const iso = from.toISOString();
-      vq = vq.gte("created_at", iso);
-      cq = cq.gte("created_at", iso);
-      pq = pq.gte("created_at", iso);
+    if (bounded) {
+      const fromIso = from.toISOString();
+      const toIso = to.toISOString();
+      vq = vq.gte("created_at", fromIso).lte("created_at", toIso);
+      cq = cq.gte("created_at", fromIso).lte("created_at", toIso);
+      pq = pq.gte("created_at", fromIso).lte("created_at", toIso);
     }
 
     const [vr, cr, pr] = await Promise.all([vq, cq, pq]);

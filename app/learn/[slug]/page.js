@@ -102,13 +102,22 @@ export default function LearnPage() {
             <div key={m.id} className="mb-3">
               <div className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-inkmuted">{m.title}</div>
               {m.lessons.filter((l) => l.published).map((l) => (
-                <button key={l.id} onClick={() => setActive(l.id)}
-                  className={`flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left text-sm ${active === l.id ? "bg-paper font-semibold" : "hover:bg-paper/60"}`}>
-                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${progress[l.id] ? "border-transparent text-white" : "border-line text-transparent"}`}
-                    style={progress[l.id] ? { background: accent } : {}}>✓</span>
-                  <span className="flex-1 truncate">{l.type === "quiz" ? l.quizTitle || l.title : l.title}</span>
-                  <span className="shrink-0 text-[11px] text-inkmuted">{LESSON_ICON[l.type] || ""}</span>
-                </button>
+                <div key={l.id}>
+                  <button onClick={() => setActive(l.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left text-sm ${active === l.id ? "bg-paper font-semibold" : "hover:bg-paper/60"}`}>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${progress[l.id] ? "border-transparent text-white" : "border-line text-transparent"}`}
+                      style={progress[l.id] ? { background: accent } : {}}>✓</span>
+                    <span className="flex-1 truncate">{l.type === "quiz" ? l.quizTitle || l.title : l.title}</span>
+                    <span className="shrink-0 text-[11px] text-inkmuted">{LESSON_ICON[l.type] || ""}</span>
+                  </button>
+                  {/* Mobile accordion: the tapped lesson opens right here, not far below. */}
+                  {active === l.id && (
+                    <div className="mb-2 mt-1 border-l-2 pl-3 lg:hidden" style={{ borderColor: accent }}>
+                      <LessonView course={course} current={l} accent={accent} watermark={watermark}
+                        progress={progress} onToggleDone={toggleDone} lessons={lessons} onGo={setActive} liveClasses={liveClasses} />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           ))}
@@ -126,43 +135,25 @@ export default function LearnPage() {
                   {liveClasses.length}
                 </span>
               </button>
+              {/* Mobile accordion: live schedule opens inline under this entry. */}
+              {showingLive && (
+                <div className="mb-2 mt-1 border-l-2 pl-3 lg:hidden" style={{ borderColor: accent }}>
+                  <LiveClasses classes={liveClasses} accent={accent} />
+                </div>
+              )}
             </div>
           )}
         </nav>
       </aside>
 
-      {/* Player */}
-      <main className="min-w-0 flex-1 p-4 sm:p-8">
+      {/* Player — desktop only. On mobile the content expands inline in the
+          sidebar (accordion), directly under the lesson you tapped. */}
+      <main className="hidden min-w-0 flex-1 p-4 sm:p-8 lg:block">
         {showingLive ? (
           <LiveClasses classes={liveClasses} accent={accent} />
         ) : current ? (
-          <div className="mx-auto max-w-3xl">
-            <h2 className="font-display text-2xl font-bold">{current.type === "quiz" ? current.quizTitle || current.title : current.title}</h2>
-            <LessonContent lesson={current} accent={accent} courseId={course.id} watermark={watermark} />
-            <div className="mt-6 flex items-center gap-3">
-              <button onClick={() => toggleDone(current.id, !progress[current.id])}
-                className="btn text-white" style={{ background: progress[current.id] ? "#0E9F6E" : accent }}>
-                {progress[current.id] ? "✓ Completed" : "Mark as complete"}
-              </button>
-              <NextBtn lessons={lessons} current={current} onGo={setActive} />
-            </div>
-
-            {/* Live classes now live in their own sidebar tab instead of being
-                repeated at the bottom of every single lesson. */}
-            {liveClasses.length > 0 && (
-              <button onClick={() => setActive("__live__")}
-                className="mt-10 flex w-full items-center gap-3 rounded-2xl border border-line bg-paper p-4 text-left hover:bg-paper/60">
-                <span className="text-xl">🔴</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold">
-                    {liveClasses.length} live {liveClasses.length === 1 ? "class" : "classes"} scheduled
-                  </span>
-                  <span className="block text-xs text-inkmuted">Tap to see the full schedule and join links</span>
-                </span>
-                <span className="shrink-0 text-sm font-semibold" style={{ color: accent }}>View →</span>
-              </button>
-            )}
-          </div>
+          <LessonView course={course} current={current} accent={accent} watermark={watermark}
+            progress={progress} onToggleDone={toggleDone} lessons={lessons} onGo={setActive} liveClasses={liveClasses} />
         ) : (
           <div className="flex h-full items-center justify-center text-inkmuted">This course has no published lessons yet.</div>
         )}
@@ -188,6 +179,37 @@ export default function LearnPage() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** The lesson player: title, content, complete/next, live promo. Shared by the
+    desktop right panel and the mobile inline accordion so both stay in sync. */
+function LessonView({ course, current, accent, watermark, progress, onToggleDone, lessons, onGo, liveClasses }) {
+  return (
+    <div className="mx-auto max-w-3xl">
+      <h2 className="font-display text-2xl font-bold">{current.type === "quiz" ? current.quizTitle || current.title : current.title}</h2>
+      <LessonContent lesson={current} accent={accent} courseId={course.id} watermark={watermark} />
+      <div className="mt-6 flex items-center gap-3">
+        <button onClick={() => onToggleDone(current.id, !progress[current.id])}
+          className="btn text-white" style={{ background: progress[current.id] ? "#0E9F6E" : accent }}>
+          {progress[current.id] ? "✓ Completed" : "Mark as complete"}
+        </button>
+        <NextBtn lessons={lessons} current={current} onGo={onGo} />
+      </div>
+      {liveClasses.length > 0 && (
+        <button onClick={() => onGo("__live__")}
+          className="mt-10 flex w-full items-center gap-3 rounded-2xl border border-line bg-paper p-4 text-left hover:bg-paper/60">
+          <span className="text-xl">🔴</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">
+              {liveClasses.length} live {liveClasses.length === 1 ? "class" : "classes"} scheduled
+            </span>
+            <span className="block text-xs text-inkmuted">Tap to see the full schedule and join links</span>
+          </span>
+          <span className="shrink-0 text-sm font-semibold" style={{ color: accent }}>View →</span>
+        </button>
       )}
     </div>
   );
