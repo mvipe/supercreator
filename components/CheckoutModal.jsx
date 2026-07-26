@@ -96,6 +96,7 @@ export default function CheckoutModal({ productType, productId, title, accent = 
         const res = await apiFetch("/api/checkout/guest-order", {
           productType, productId,
           email: g.email.trim(), phone: g.phone.trim(), state: g.state, gstin: g.gstin,
+          coupon: allowCoupon ? (coupon.trim().toUpperCase() || null) : null,
           pwywAmount: price?.isPwyw ? Number(pwyw) : null
         });
         if (res.free) { await signInGuest(res.tokenHash); onSuccess(); return; }

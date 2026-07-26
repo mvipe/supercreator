@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Field, RadioCard } from "@/components/ui";
+import { Field, RadioCard, Switch } from "@/components/ui";
 import { slugify, uploadImage } from "@/lib/courseModel";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -68,6 +68,44 @@ function DiscountFields({ d, patchData }) {
   );
 }
 
+/** Discount coupons, same as the course pricing tab. Stored on product.data.coupons.
+ *  Buyers enter a code at checkout for a % off. */
+function CouponsField({ d, patchData }) {
+  const [draft, setDraft] = useState({ code: "", percentOff: 10 });
+  const coupons = d.coupons || [];
+  function add() {
+    const code = draft.code.trim().toUpperCase();
+    if (!code) return;
+    if (coupons.some((c) => c.code === code)) { alert("That code already exists."); return; }
+    patchData({ coupons: [...coupons, { code, percentOff: Math.min(100, Math.max(1, Number(draft.percentOff))), active: true }] });
+    setDraft({ code: "", percentOff: 10 });
+  }
+  return (
+    <Field label="Discount coupons" hint="Buyers enter these at checkout for a % off">
+      <div className="space-y-2">
+        {coupons.map((c, i) => (
+          <div key={c.code} className="flex items-center gap-3 rounded-lg bg-paper px-3 py-2">
+            <span className="rounded bg-brand-soft px-2 py-1 font-mono text-sm font-bold text-brand-dark">{c.code}</span>
+            <span className="text-sm">{c.percentOff}% off</span>
+            <label className="ml-auto flex items-center gap-2 text-xs font-semibold">
+              Active
+              <Switch on={c.active} onChange={(v) => patchData({ coupons: coupons.map((x, j) => j === i ? { ...x, active: v } : x) })} />
+            </label>
+            <button type="button" className="text-xs font-semibold text-danger"
+              onClick={() => patchData({ coupons: coupons.filter((_, j) => j !== i) })}>✕</button>
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <input className="input uppercase" placeholder="CODE" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
+          <input className="input w-24 shrink-0" type="number" min="1" max="100" value={draft.percentOff} onChange={(e) => setDraft({ ...draft, percentOff: e.target.value })} />
+          <span className="flex items-center text-sm text-inkmuted">%</span>
+          <button type="button" className="btn-ghost shrink-0" onClick={add}>+ Add</button>
+        </div>
+      </div>
+    </Field>
+  );
+}
+
 /* ---------------- EVENT FORM ---------------- */
 export function EventForm({ product, patch, patchData }) {
   const d = product.data;
@@ -101,6 +139,7 @@ export function EventForm({ product, patch, patchData }) {
         <>
           <Field label="Ticket price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
           <DiscountFields d={d} patchData={patchData} />
+          <CouponsField d={d} patchData={patchData} />
         </>
       )}
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
@@ -160,6 +199,7 @@ export function LockedForm({ product, patch, patchData }) {
       </Field>
       <Field label="Unlock price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
       <DiscountFields d={d} patchData={patchData} />
+      <CouponsField d={d} patchData={patchData} />
       <SlugField product={product} patch={patch} prefix="/l/" />
     </div>
   );
@@ -184,6 +224,7 @@ export function PaymentForm({ product, patch, patchData }) {
       {d.priceMode === "fixed"
         ? <><Field label="Amount (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field><DiscountFields d={d} patchData={patchData} /></>
         : <Field label="Minimum amount (₹)" required><input className="input" type="number" min="1" value={d.minPrice} onChange={(e) => patchData({ minPrice: Number(e.target.value) })} /></Field>}
+      <CouponsField d={d} patchData={patchData} />
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />
       </Field>
@@ -257,6 +298,7 @@ export function BookForm({ product, patch, patchData }) {
       {d.priceMode === "fixed"
         ? <><Field label="Price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field><DiscountFields d={d} patchData={patchData} /></>
         : <Field label="Minimum price (₹)" required><input className="input" type="number" min="1" value={d.minPrice} onChange={(e) => patchData({ minPrice: Number(e.target.value) })} /></Field>}
+      <CouponsField d={d} patchData={patchData} />
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />
       </Field>

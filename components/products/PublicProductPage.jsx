@@ -82,7 +82,7 @@ export default function PublicProductPage({ type, View }) {
       <View product={product} mode="live" onBuy={onBuy} unlocked={unlocked} owned={owned} registered={showEventAccess} />
       {checkout && (
         <CheckoutModal productType={type} productId={product.id} title={product.title} accent={d.accent}
-          price={priceInfo} user={user}
+          price={priceInfo} user={user} allowCoupon={!priceInfo.isFree}
           onClose={() => setCheckout(false)}
           onSuccess={() => { setCheckout(false); setOwned(true); setJustPaid(true); window.scrollTo(0, 0); }} />
       )}
