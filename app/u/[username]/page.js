@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { inr } from "@/lib/courseModel";
-import { TYPE_META, productPrice } from "@/lib/products";
+import { TYPE_META, productPrice, productMrp } from "@/lib/products";
 import { themeWithBrand, themeSurface } from "@/lib/storeTheme";
 import { SHEEN } from "@/lib/texture";
 import { SocialIcon, socialLabel } from "@/components/BrandIcons";
@@ -44,9 +44,9 @@ export default function StorePublic() {
         ...(products || []).map((x) => {
           const d = x.data || {};
           const price = productPrice(x.type, d);
-          // course-style discount: the optional original price (d.mrp) shows struck-through
-          const mrp = Number(d.mrp) > price ? Number(d.mrp) : 0;
-          return { type: x.type, title: x.title, slug: x.slug, img: d.coverImages?.[0], price, mrp: d.priceMode === "pwyw" ? 0 : mrp };
+          // course-style discount: original price struck-through when a discount is on
+          const mrp = productMrp(x.type, d);
+          return { type: x.type, title: x.title, slug: x.slug, img: d.coverImages?.[0], price, mrp };
         })
       ];
       setItems(list); setHasSessions((sessions || []).length > 0);
