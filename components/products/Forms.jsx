@@ -47,6 +47,27 @@ function ImagesField({ label, images = [], onChange }) {
   );
 }
 
+/** "Offer discounted price" toggle — identical UX to the course pricing tab.
+ *  The main price field is the ORIGINAL; the discounted price is what's charged
+ *  and the original shows struck-through with a % off badge. */
+function DiscountFields({ d, patchData }) {
+  return (
+    <>
+      <label className="flex cursor-pointer items-center gap-3">
+        <input type="checkbox" className="h-4 w-4 accent-brand" checked={!!d.discountEnabled}
+          onChange={(e) => patchData({ discountEnabled: e.target.checked })} />
+        <span className="text-sm font-semibold">Offer discounted price</span>
+      </label>
+      {d.discountEnabled && (
+        <Field label="Discounted price (₹)" hint="Shown with the original price struck through">
+          <input className="input" type="number" min="0" value={d.discountPrice || 0}
+            onChange={(e) => patchData({ discountPrice: Number(e.target.value) })} />
+        </Field>
+      )}
+    </>
+  );
+}
+
 /* ---------------- EVENT FORM ---------------- */
 export function EventForm({ product, patch, patchData }) {
   const d = product.data;
@@ -77,7 +98,10 @@ export function EventForm({ product, patch, patchData }) {
         <RadioCard checked={d.priceMode === "free"} title="Free" onClick={() => patchData({ priceMode: "free" })} />
       </div>
       {d.priceMode === "fixed" && (
-        <Field label="Ticket price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
+        <>
+          <Field label="Ticket price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
+          <DiscountFields d={d} patchData={patchData} />
+        </>
       )}
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />
@@ -135,6 +159,7 @@ export function LockedForm({ product, patch, patchData }) {
         </div>
       </Field>
       <Field label="Unlock price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
+      <DiscountFields d={d} patchData={patchData} />
       <SlugField product={product} patch={patch} prefix="/l/" />
     </div>
   );
@@ -157,7 +182,7 @@ export function PaymentForm({ product, patch, patchData }) {
         <RadioCard checked={d.priceMode === "pwyw"} title="Customer decides" onClick={() => patchData({ priceMode: "pwyw" })} />
       </div>
       {d.priceMode === "fixed"
-        ? <Field label="Amount (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
+        ? <><Field label="Amount (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field><DiscountFields d={d} patchData={patchData} /></>
         : <Field label="Minimum amount (₹)" required><input className="input" type="number" min="1" value={d.minPrice} onChange={(e) => patchData({ minPrice: Number(e.target.value) })} /></Field>}
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />
@@ -230,7 +255,7 @@ export function BookForm({ product, patch, patchData }) {
         <RadioCard checked={d.priceMode === "pwyw"} title="Customer decides" onClick={() => patchData({ priceMode: "pwyw" })} />
       </div>
       {d.priceMode === "fixed"
-        ? <Field label="Price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>
+        ? <><Field label="Price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field><DiscountFields d={d} patchData={patchData} /></>
         : <Field label="Minimum price (₹)" required><input className="input" type="number" min="1" value={d.minPrice} onChange={(e) => patchData({ minPrice: Number(e.target.value) })} /></Field>}
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />

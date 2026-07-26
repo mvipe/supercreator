@@ -1,5 +1,6 @@
 "use client";
 import { ytEmbed, inr } from "@/lib/courseModel";
+import { productPrice, productMrp } from "@/lib/products";
 
 /** Discount % from an optional struck-through original price. 0 = no discount. */
 const pctOff = (price, mrp) => (Number(mrp) > Number(price) ? Math.round(((mrp - price) / mrp) * 100) : 0);
@@ -73,7 +74,7 @@ export function EventView({ product, mode = "live", onBuy }) {
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <InfoCard label="When" value={dt ? dt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "TBA"} />
         <InfoCard label="Where" value={d.mode === "offline" ? (d.venue || "Venue TBA") : "Online"} />
-        <InfoCard label="Price" value={d.priceMode === "free" ? "Free" : <span className="flex flex-wrap items-baseline gap-1.5"><PriceBits price={d.price} mrp={d.mrp} strikeClass="text-xs" offClass="text-xs" /></span>} />
+        <InfoCard label="Price" value={d.priceMode === "free" ? "Free" : <span className="flex flex-wrap items-baseline gap-1.5"><PriceBits price={productPrice("event", d)} mrp={productMrp("event", d)} strikeClass="text-xs" offClass="text-xs" /></span>} />
       </div>
       <div className="mt-6">
         <Label accent={accent}>About the event</Label>
@@ -102,7 +103,7 @@ export function LockedView({ product, mode = "live", onBuy, unlocked = false }) 
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
             </div>
             <p className="mt-3 text-sm text-inkmuted">{d.teaser || "Unlock this content to view it."}</p>
-            <div className="mt-2 flex flex-wrap items-baseline justify-center gap-2 font-display text-2xl font-bold"><PriceBits price={d.price} mrp={d.mrp} /></div>
+            <div className="mt-2 flex flex-wrap items-baseline justify-center gap-2 font-display text-2xl font-bold"><PriceBits price={productPrice("locked", d)} mrp={productMrp("locked", d)} /></div>
           </div>
           <Cta accent={accent} label={d.buttonText || "Unlock now"} onClick={onBuy} mode={mode} />
         </>
@@ -138,7 +139,7 @@ export function PaymentView({ product, mode = "live", onBuy }) {
       <div className="mt-6 rounded-2xl border border-line bg-paper p-6 text-center">
         <div className="text-xs font-semibold uppercase tracking-wide text-inkmuted">{d.priceMode === "pwyw" ? "Pay what you want (min)" : "Amount"}</div>
         <div className="mt-1 flex flex-wrap items-baseline justify-center gap-2 font-display text-3xl font-bold">
-          {d.priceMode === "pwyw" ? inr(d.minPrice) : <PriceBits price={d.price} mrp={d.mrp} />}
+          {d.priceMode === "pwyw" ? inr(d.minPrice) : <PriceBits price={productPrice("payment", d)} mrp={productMrp("payment", d)} />}
         </div>
       </div>
       <Cta accent={accent} label={d.buttonText || "Pay now"} onClick={onBuy} mode={mode} />
@@ -176,12 +177,12 @@ export function BookView({ product, mode = "live", onBuy, owned = false }) {
             <span className="pill inline-flex items-baseline gap-1.5" style={{ background: "#EAF1FE", color: accent }}>
               {d.priceMode === "free" ? "Free" : (
                 <>
-                  {inr(d.priceMode === "pwyw" ? d.minPrice : d.price)}
-                  {d.priceMode === "fixed" && pctOff(d.price, d.mrp) > 0 && <span className="text-[11px] line-through opacity-60">{inr(d.mrp)}</span>}
+                  {inr(d.priceMode === "pwyw" ? d.minPrice : productPrice("book", d))}
+                  {productMrp("book", d) > 0 && <span className="text-[11px] line-through opacity-60">{inr(productMrp("book", d))}</span>}
                 </>
               )}
             </span>
-            {d.priceMode === "fixed" && pctOff(d.price, d.mrp) > 0 && <span className="pill" style={{ background: "#DCFCE7", color: "#0E9F6E" }}>{pctOff(d.price, d.mrp)}% off</span>}
+            {productMrp("book", d) > 0 && <span className="pill" style={{ background: "#DCFCE7", color: "#0E9F6E" }}>{pctOff(productPrice("book", d), productMrp("book", d))}% off</span>}
           </div>
           <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed">{d.description}</p>
           {owned ? (

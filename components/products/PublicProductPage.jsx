@@ -6,7 +6,7 @@ import { inr } from "@/lib/courseModel";
 import { useAuth } from "@/components/AuthProvider";
 import CheckoutModal from "@/components/CheckoutModal";
 import VisitTracker from "@/components/VisitTracker";
-import { TYPE_META } from "@/lib/products";
+import { TYPE_META, productPrice } from "@/lib/products";
 
 export default function PublicProductPage({ type, View }) {
   const { slug } = useParams();
@@ -51,11 +51,13 @@ export default function PublicProductPage({ type, View }) {
     setCheckout(true);
   }
 
+  // Label shows the effective (discounted) price; the server still recomputes.
+  const eff = productPrice(type, d);
   const priceInfo =
-    type === "event" ? { isFree: d.priceMode === "free", label: inr(d.price) } :
-    type === "locked" ? { label: inr(d.price) } :
-    type === "book" ? { isPwyw: d.priceMode === "pwyw", min: d.minPrice, label: inr(d.price) } :
-    { isPwyw: d.priceMode === "pwyw", min: d.minPrice, label: inr(d.price) };
+    type === "event" ? { isFree: d.priceMode === "free", label: inr(eff) } :
+    type === "locked" ? { label: inr(eff) } :
+    type === "book" ? { isPwyw: d.priceMode === "pwyw", min: d.minPrice, label: inr(eff) } :
+    { isPwyw: d.priceMode === "pwyw", min: d.minPrice, label: inr(eff) };
 
   const unlocked = type === "locked" && owned;
   const showEventAccess = type === "event" && owned;
