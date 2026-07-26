@@ -44,8 +44,8 @@ export default function StorePublic() {
         ...(products || []).map((x) => {
           const d = x.data || {};
           const price = productPrice(x.type, d);
-          // book/course-style discount: original price kept as `mrp` when higher
-          const mrp = Number(d.price) > price ? Number(d.price) : 0;
+          // course-style discount: the optional original price (d.mrp) shows struck-through
+          const mrp = Number(d.mrp) > price ? Number(d.mrp) : 0;
           return { type: x.type, title: x.title, slug: x.slug, img: d.coverImages?.[0], price, mrp: d.priceMode === "pwyw" ? 0 : mrp };
         })
       ];
