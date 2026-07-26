@@ -1,6 +1,21 @@
 "use client";
 import { ytEmbed, inr } from "@/lib/courseModel";
 
+/** Discount % from an optional struck-through original price. 0 = no discount. */
+const pctOff = (price, mrp) => (Number(mrp) > Number(price) ? Math.round(((mrp - price) / mrp) * 100) : 0);
+
+/** Inline "₹price ₹mrp NN% off". `free`/pwyw callers pass the right price. */
+function PriceBits({ price, mrp, strikeClass = "text-base", offClass = "text-sm" }) {
+  const off = pctOff(price, mrp);
+  return (
+    <>
+      {inr(price)}
+      {off > 0 && <span className={`${strikeClass} font-normal text-inkmuted line-through`}>{inr(mrp)}</span>}
+      {off > 0 && <span className={`${offClass} font-bold text-teal`}>{off}% off</span>}
+    </>
+  );
+}
+
 function Shell({ accent = "#2E6EF7", children }) {
   return (
     <div className="min-h-full bg-white text-ink">
@@ -58,7 +73,7 @@ export function EventView({ product, mode = "live", onBuy }) {
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <InfoCard label="When" value={dt ? dt.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "TBA"} />
         <InfoCard label="Where" value={d.mode === "offline" ? (d.venue || "Venue TBA") : "Online"} />
-        <InfoCard label="Price" value={d.priceMode === "free" ? "Free" : inr(d.price)} />
+        <InfoCard label="Price" value={d.priceMode === "free" ? "Free" : <span className="flex flex-wrap items-baseline gap-1.5"><PriceBits price={d.price} mrp={d.mrp} strikeClass="text-xs" offClass="text-xs" /></span>} />
       </div>
       <div className="mt-6">
         <Label accent={accent}>About the event</Label>
@@ -87,7 +102,7 @@ export function LockedView({ product, mode = "live", onBuy, unlocked = false }) 
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
             </div>
             <p className="mt-3 text-sm text-inkmuted">{d.teaser || "Unlock this content to view it."}</p>
-            <div className="mt-2 font-display text-2xl font-bold">{inr(d.price)}</div>
+            <div className="mt-2 flex flex-wrap items-baseline justify-center gap-2 font-display text-2xl font-bold"><PriceBits price={d.price} mrp={d.mrp} /></div>
           </div>
           <Cta accent={accent} label={d.buttonText || "Unlock now"} onClick={onBuy} mode={mode} />
         </>
@@ -122,7 +137,9 @@ export function PaymentView({ product, mode = "live", onBuy }) {
       <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-inkmuted">{d.description}</p>
       <div className="mt-6 rounded-2xl border border-line bg-paper p-6 text-center">
         <div className="text-xs font-semibold uppercase tracking-wide text-inkmuted">{d.priceMode === "pwyw" ? "Pay what you want (min)" : "Amount"}</div>
-        <div className="mt-1 font-display text-3xl font-bold">{inr(d.priceMode === "pwyw" ? d.minPrice : d.price)}</div>
+        <div className="mt-1 flex flex-wrap items-baseline justify-center gap-2 font-display text-3xl font-bold">
+          {d.priceMode === "pwyw" ? inr(d.minPrice) : <PriceBits price={d.price} mrp={d.mrp} />}
+        </div>
       </div>
       <Cta accent={accent} label={d.buttonText || "Pay now"} onClick={onBuy} mode={mode} />
     </Shell>
@@ -156,7 +173,15 @@ export function BookView({ product, mode = "live", onBuy, owned = false }) {
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             {d.pages > 0 && <span className="pill bg-paper text-inkmuted">{d.pages} pages</span>}
             {d.format && <span className="pill bg-paper text-inkmuted">{d.format}</span>}
-            <span className="pill" style={{ background: "#EAF1FE", color: accent }}>{d.priceMode === "free" ? "Free" : inr(d.priceMode === "pwyw" ? d.minPrice : d.price)}</span>
+            <span className="pill inline-flex items-baseline gap-1.5" style={{ background: "#EAF1FE", color: accent }}>
+              {d.priceMode === "free" ? "Free" : (
+                <>
+                  {inr(d.priceMode === "pwyw" ? d.minPrice : d.price)}
+                  {d.priceMode === "fixed" && pctOff(d.price, d.mrp) > 0 && <span className="text-[11px] line-through opacity-60">{inr(d.mrp)}</span>}
+                </>
+              )}
+            </span>
+            {d.priceMode === "fixed" && pctOff(d.price, d.mrp) > 0 && <span className="pill" style={{ background: "#DCFCE7", color: "#0E9F6E" }}>{pctOff(d.price, d.mrp)}% off</span>}
           </div>
           <p className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed">{d.description}</p>
           {owned ? (
