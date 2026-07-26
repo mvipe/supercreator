@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { supabaseAdmin, getUserFromRequest, isBlocked } from "@/lib/supabaseAdmin";
+import { productChargeRupees } from "@/lib/products";
 
 async function loadProduct(productType, productId) {
   if (productType === "course") {
@@ -32,21 +33,10 @@ function computeAmountPaise(productType, loaded, body) {
   }
   if (productType === "booking") return { amount: Math.round((Number(loaded.session.price) || 0) * 100), applied: null };
   const d = loaded.product.data || {};
-  if (productType === "event") return { amount: d.priceMode === "free" ? 0 : Math.round((Number(d.price) || 0) * 100), applied: null };
-  if (productType === "locked") return { amount: Math.round((Number(d.price) || 0) * 100), applied: null };
-  if (productType === "book") {
-    if (d.priceMode === "pwyw") {
-      const min = Number(d.minPrice) || 1;
-      return { amount: Math.round(Math.max(min, Number(body.pwywAmount) || 0) * 100), applied: null };
-    }
-    return { amount: Math.round((Number(d.price) || 0) * 100), applied: null };
-  }
-  if (productType === "payment") {
-    if (d.priceMode === "pwyw") {
-      const min = Number(d.minPrice) || 1;
-      return { amount: Math.round(Math.max(min, Number(body.pwywAmount) || 0) * 100), applied: null };
-    }
-    return { amount: Math.round((Number(d.price) || 0) * 100), applied: null };
+  // event/locked/book/payment: honour free, pwyw and the "Offer discounted price" toggle.
+  if (["event", "locked", "book", "payment"].includes(productType)) {
+    const rupees = productChargeRupees(productType, d, { pwywAmount: body.pwywAmount });
+    return { amount: Math.round(rupees * 100), applied: null };
   }
   return { error: "Unknown product type" };
 }

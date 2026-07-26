@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { supabaseAdmin, getUserFromRequest, isBlocked } from "@/lib/supabaseAdmin";
-import { productPrice } from "@/lib/products";
+import { productPrice, productChargeRupees } from "@/lib/products";
 
 // =============================================================
 // Guest-capable checkout for COURSES (+ one optional add-on product) and for
@@ -48,18 +48,9 @@ function courseAmountPaise(course, body) {
   return { paise: Math.round(rupees * 100), applied };
 }
 
-/** Rupees->paise for a standalone product, honouring free/pwyw modes. */
+/** Rupees->paise for a standalone product, honouring free/pwyw/discount. */
 function productAmountPaise(type, d, body) {
-  if (type === "event") return d.priceMode === "free" ? 0 : Math.round((Number(d.price) || 0) * 100);
-  if (type === "locked") return Math.round((Number(d.price) || 0) * 100);
-  if (type === "book" || type === "payment") {
-    if (d.priceMode === "pwyw") {
-      const min = Number(d.minPrice) || 1;
-      return Math.round(Math.max(min, Number(body.pwywAmount) || 0) * 100);
-    }
-    return Math.round((Number(d.price) || 0) * 100);
-  }
-  return Math.round((Number(d.price) || 0) * 100);
+  return Math.round(productChargeRupees(type, d, { pwywAmount: body.pwywAmount }) * 100);
 }
 
 /** Resolve the configured add-on product (owned by the same creator). */

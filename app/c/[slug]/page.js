@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Script from "next/script";
 import { supabase, apiFetch } from "@/lib/supabase";
 import { fromRow } from "@/lib/courseModel";
-import { productPrice } from "@/lib/products";
+import { productPrice, productMrp } from "@/lib/products";
 import { useAuth } from "@/components/AuthProvider";
 import CoursePublicView from "@/components/CoursePublicView";
 import VisitTracker from "@/components/VisitTracker";
@@ -77,7 +77,7 @@ export default function PublicCoursePage() {
     if (!data) return null;
     const d = data.data || {};
     const price = productPrice(data.type, d);
-    const mrp = Number(d.price) > price ? Number(d.price) : 0;
+    const mrp = productMrp(data.type, d);
     return { type: data.type, id: data.id, title: data.title, price, mrp, img: d.coverImages?.[0] || null, subtitle: d.subtitle || "" };
   }
 
