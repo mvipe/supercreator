@@ -144,8 +144,8 @@ export function BookView({ product, mode = "live", onBuy, owned = false }) {
   const accent = d.accent || "#2E6EF7";
   return (
     <Shell accent={accent}>
-      <div className="grid gap-6 sm:grid-cols-[260px_1fr]">
-        <div className="mx-auto w-full max-w-[260px] overflow-hidden rounded-xl border border-line shadow-lg sm:mx-0">
+      <div className="grid items-start gap-6 sm:grid-cols-[260px_1fr]">
+        <div className="mx-auto w-full max-w-[260px] self-start overflow-hidden rounded-xl border border-line shadow-lg sm:mx-0">
           {d.coverImages?.[0]
             ? <img src={d.coverImages[0]} alt="" className="block h-auto w-full" />
             : <div className="flex aspect-[3/4] items-center justify-center bg-gradient-to-br from-brand to-brand-dark text-white"><span className="text-4xl">📕</span></div>}

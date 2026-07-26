@@ -245,19 +245,34 @@ function LessonBody({ lesson, onChange, userId }) {
   const [notesUploading, setNotesUploading] = useState(false);
   const type = lesson.type || "video";
 
-  const handleNotesUpload = async (file) => {
-    if (!file) return;
+  // A notes lesson can hold MANY files. Older lessons kept a single
+  // mediaPath/fileName — treat that as a one-item list for back-compat.
+  const notesFiles = lesson.files?.length
+    ? lesson.files
+    : (lesson.mediaPath ? [{ mediaPath: lesson.mediaPath, fileName: lesson.fileName, fileType: lesson.fileType }] : []);
+
+  const syncNotes = (files) =>
+    onChange({ files, mediaPath: files[0]?.mediaPath || "", fileName: files[0]?.fileName || "", fileType: files[0]?.fileType || "" });
+
+  const handleNotesUpload = async (fileList) => {
+    const arr = Array.from(fileList || []);
+    if (!arr.length) return;
     setNotesUploading(true);
     try {
       // Private bucket -> we keep a path, never a public URL.
-      const path = await uploadSecureMedia(userId, file, "notes");
-      onChange({ mediaPath: path, fileName: file.name, fileType: file.type });
+      const added = [];
+      for (const file of arr) {
+        const path = await uploadSecureMedia(userId, file, "notes");
+        added.push({ mediaPath: path, fileName: file.name, fileType: file.type });
+      }
+      syncNotes([...notesFiles, ...added]);
     } catch (error) {
       alert("Failed to upload notes: " + error.message);
     } finally {
       setNotesUploading(false);
     }
   };
+  const removeNote = (idx) => syncNotes(notesFiles.filter((_, i) => i !== idx));
   
   const handleVideoUpload = async (file) => {
     if (!file) return;
@@ -372,21 +387,21 @@ function LessonBody({ lesson, onChange, userId }) {
   if (type === "notes") {
     return (
       <div className="space-y-3">
-        <Field label="Notes file (PDF recommended)">
-          {lesson.mediaPath ? (
-            <div className="flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-2.5">
-              <span className="text-lg">📚</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{lesson.fileName || "Uploaded file"}</span>
-              <button type="button" className="shrink-0 text-xs font-semibold text-danger"
-                onClick={() => onChange({ mediaPath: "", fileName: "", fileType: "" })}>Remove</button>
-            </div>
-          ) : (
+        <Field label="Notes files (PDF recommended) — add as many as you like">
+          <div className="space-y-2">
+            {notesFiles.map((f, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-2.5">
+                <span className="text-lg">📚</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{f.fileName || `File ${i + 1}`}</span>
+                <button type="button" className="shrink-0 text-xs font-semibold text-danger" onClick={() => removeNote(i)}>Remove</button>
+              </div>
+            ))}
             <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line px-3 py-6 text-sm text-inkmuted hover:border-brand hover:text-brand ${notesUploading ? "opacity-60" : ""}`}>
-              <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.epub" className="hidden"
-                onChange={(e) => handleNotesUpload(e.target.files?.[0])} disabled={notesUploading} />
-              {notesUploading ? "Uploading…" : "📎 Upload notes (max 50 MB)"}
+              <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.epub" multiple className="hidden"
+                onChange={(e) => handleNotesUpload(e.target.files)} disabled={notesUploading} />
+              {notesUploading ? "Uploading…" : (notesFiles.length ? "📎 Add more files (max 50 MB each)" : "📎 Upload notes (max 50 MB each)")}
             </label>
-          )}
+          </div>
         </Field>
 
         <div className="flex items-center justify-between rounded-lg border border-line bg-white px-3 py-2.5">

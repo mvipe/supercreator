@@ -442,39 +442,54 @@ export default function QuizModal({ lesson, accent, onClose }) {
                       : "Review the material and try again."}
                 </p>
 
-                {/* Answer Review */}
-                <div className="mt-8 text-left space-y-3">
-                  <div className="text-sm font-bold text-ink mb-3">Answer Review:</div>
+                {/* Answer Review — every option colour-coded like a test platform:
+                    green = correct option, red = a wrong option you picked. */}
+                <div className="mt-8 text-left space-y-4">
+                  <div className="text-sm font-bold text-ink">Answer review</div>
                   {questions.map((q, qi) => {
                     const chosen = answers[q.id];
+                    const chosenIds = q.type === "multiple" ? (Array.isArray(chosen) ? chosen : []) : (chosen ? [chosen] : []);
                     const correctIds = q.options.filter((o) => o.correct).map((o) => o.id);
                     const isCorrect = q.type === "multiple"
-                      ? Array.isArray(chosen) && correctIds.length > 0 && correctIds.every((id) => chosen.includes(id)) && chosen.every((id) => correctIds.includes(id))
-                      : chosen === correctIds[0];
+                      ? correctIds.length > 0 && correctIds.every((id) => chosenIds.includes(id)) && chosenIds.every((id) => correctIds.includes(id))
+                      : chosenIds[0] === correctIds[0];
                     return (
-                      <div key={q.id} className={`rounded-lg border-2 p-3 ${
-                        isCorrect ? "border-teal bg-teal/5" : "border-red-200 bg-red-50"
-                      }`}>
+                      <div key={q.id} className="rounded-2xl border border-line p-4">
                         <div className="flex items-start gap-2">
-                          <div className={`mt-0.5 text-lg ${isCorrect ? "text-teal" : "text-danger"}`}>
+                          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${isCorrect ? "bg-teal" : "bg-danger"}`}>
                             {isCorrect ? "✓" : "✕"}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-ink">{qi + 1}. <LatexText text={q.q} /></div>
-                            <div className="mt-2 text-xs text-inkmuted">
-                              <div>Your answer: <span className="font-semibold text-ink">{
-                                q.type === "multiple"
-                                  ? (Array.isArray(chosen) && chosen.length > 0 ? q.options.filter((o) => chosen.includes(o.id)).map((o) => o.text).join(", ") : "Not answered")
-                                  : q.options.find((o) => o.id === chosen)?.text || "Not answered"
-                              }</span></div>
-                              <div className="mt-1">Correct answer: <span className="font-semibold text-teal">{
-                                q.type === "multiple"
-                                  ? q.options.filter((o) => correctIds.includes(o.id)).map((o) => o.text).join(", ")
-                                  : q.options.find((o) => o.id === correctIds[0])?.text || "Not set"
-                              }</span></div>
-                            </div>
-                          </div>
+                          </span>
+                          <div className="min-w-0 flex-1 font-semibold text-ink">{qi + 1}. <LatexText text={q.q} /></div>
                         </div>
+                        {q.image && <img src={q.image} alt="" className="mt-3 max-h-52 rounded-xl border border-line" />}
+                        <div className="mt-3 space-y-2">
+                          {q.options.map((o) => {
+                            const picked = chosenIds.includes(o.id);
+                            const correct = o.correct;
+                            const cls = correct
+                              ? "border-teal bg-teal/10"
+                              : picked ? "border-red-300 bg-red-50" : "border-line bg-white";
+                            return (
+                              <div key={o.id} className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-sm ${cls}`}>
+                                <span className={`shrink-0 text-base font-bold ${correct ? "text-teal" : picked ? "text-danger" : "text-inkmuted/40"}`}>
+                                  {correct ? "✓" : picked ? "✕" : "○"}
+                                </span>
+                                {o.image && <img src={o.image} alt="" className="h-9 w-9 shrink-0 rounded object-cover" />}
+                                <span className="min-w-0 flex-1"><LatexText text={o.text} /></span>
+                                {picked && (
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${correct ? "bg-teal text-white" : "bg-danger text-white"}`}>
+                                    You marked this
+                                  </span>
+                                )}
+                                {correct && !picked && (
+                                  <span className="shrink-0 rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-bold uppercase text-teal">Correct answer</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {chosenIds.length === 0 && <p className="mt-2 text-xs font-semibold text-danger">You didn't answer this question.</p>}
+                        {q.explanation && <div className="mt-3 rounded-xl bg-paper p-3 text-xs text-inkmuted">💡 {q.explanation}</div>}
                       </div>
                     );
                   })}
