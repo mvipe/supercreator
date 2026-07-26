@@ -20,6 +20,7 @@ export default function StorePage() {
   const [msg, setMsg] = useState("");
   const [hasSessions, setHasSessions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [bgUploading, setBgUploading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -30,18 +31,24 @@ export default function StorePage() {
       .then(({ count }) => setHasSessions((count || 0) > 0));
   }, [user]);
 
-
+  // Debounced autosave — persist ~1.2s after the last edit so switching tabs or
+  // leaving the page never loses work. The Save button stays for an explicit save.
+  useEffect(() => {
+    if (!p || !dirty || saving) return;
+    const t = setTimeout(() => { save(); }, 1200);
+    return () => clearTimeout(t);
+  }, [p, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!p) return <div className="flex min-h-screen items-center justify-center text-inkmuted">Loading…</div>;
 
   const patch = (x) => { setP({ ...p, ...x }); setDirty(true); setMsg(""); };
   const socials = p.socials || {};
   const links = p.links || [];
-  const storeUrl = p.username ? `/u/${p.username}` : null;
+  const storeUrl = p.username ? `/${p.username}` : null;
 
   async function save() {
     setSaving(true);
-    const profileUpdate = {
+    const base = {
       user_id: user.id,
       username: p.username || null,
       display_name: p.display_name || "",
@@ -60,10 +67,22 @@ export default function StorePage() {
       ga_id: p.ga_id || ""
     };
 
-    const { error } = await supabase.from("mp_profiles").upsert(profileUpdate);
+    let { error } = await supabase.from("mp_profiles").upsert({ ...base, bg_image: p.bg_image || "" });
+    // If the bg_image column isn't migrated yet, still save everything else.
+    if (error && /bg_image/i.test(error.message || "")) {
+      ({ error } = await supabase.from("mp_profiles").upsert(base));
+    }
     setSaving(false);
     if (error) { setMsg(error.message.includes("duplicate") ? "That username is taken — try another." : error.message); return; }
     setDirty(false); setMsg("Saved ✓"); setTimeout(() => setMsg(""), 2500);
+  }
+
+  async function onBg(files) {
+    if (!files?.[0]) return;
+    setBgUploading(true);
+    try { const url = await uploadImage(user.id, files[0]); patch({ bg_image: url }); }
+    catch (e) { setMsg(e.message); }
+    finally { setBgUploading(false); }
   }
 
   async function onAvatar(files) {
@@ -116,9 +135,9 @@ export default function StorePage() {
 
               <div className="card space-y-5 p-5">
                 <h2 className="font-display text-lg font-bold">Store header</h2>
-                <Field label="Username" required hint="Your store is at /u/username and bookings at /book/username">
+                <Field label="Username" required hint="Your store is at supercreators.in/username and bookings at /book/username">
                   <div className="flex overflow-hidden rounded-[10px] border border-line focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20">
-                    <span className="flex items-center border-r border-line bg-paper px-3 text-sm text-inkmuted">/u/</span>
+                    <span className="flex items-center border-r border-line bg-paper px-3 text-sm text-inkmuted">supercreators.in/</span>
                     <input className="w-full px-3.5 py-2.5 text-sm outline-none" value={p.username || ""} onChange={(e) => patch({ username: slugify(e.target.value) || null })} />
                   </div>
                 </Field>
@@ -199,6 +218,30 @@ export default function StorePage() {
                   </select>
                 </Field>
               </div>
+
+              <div className="card space-y-4 p-5">
+                <div>
+                  <h2 className="font-display text-lg font-bold">Custom background</h2>
+                  <p className="mt-0.5 text-sm text-inkmuted">Upload your own background image — it overrides the theme and stays saved until you change or remove it.</p>
+                </div>
+                {p.bg_image ? (
+                  <div className="space-y-3">
+                    <div className="h-36 w-full overflow-hidden rounded-xl border border-line bg-cover bg-center" style={{ backgroundImage: `url(${p.bg_image})` }} />
+                    <div className="flex items-center gap-3">
+                      <label className="btn-ghost cursor-pointer text-sm">{bgUploading ? "Uploading…" : "Replace image"}
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => onBg(e.target.files)} disabled={bgUploading} />
+                      </label>
+                      <button type="button" className="text-sm font-semibold text-danger" onClick={() => patch({ bg_image: "" })}>Remove</button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line px-6 py-8 text-center text-sm text-inkmuted hover:border-brand hover:text-brand ${bgUploading ? "opacity-60" : ""}`}>
+                    <span className="text-2xl">🖼️</span>
+                    <span>{bgUploading ? "Uploading…" : "Upload background image (JPG / PNG)"}</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => onBg(e.target.files)} disabled={bgUploading} />
+                  </label>
+                )}
+              </div>
             </>
           )}
 
@@ -209,7 +252,7 @@ export default function StorePage() {
                 <h2 className="font-display text-lg font-bold">Store details</h2>
                 <Field label="Your store's official link">
                   <div className="flex overflow-hidden rounded-[10px] border border-line">
-                    <span className="flex items-center border-r border-line bg-paper px-3 text-sm text-inkmuted">supercreators.in/u/</span>
+                    <span className="flex items-center border-r border-line bg-paper px-3 text-sm text-inkmuted">supercreators.in/</span>
                     <input className="w-full px-3.5 py-2.5 text-sm outline-none" value={p.username || ""} onChange={(e) => patch({ username: slugify(e.target.value) || null })} />
                   </div>
                 </Field>
@@ -260,7 +303,8 @@ export default function StorePage() {
           <div className="sticky bottom-0 -mx-8 flex items-center gap-3 border-t border-line bg-white/90 px-8 py-3 backdrop-blur">
             <button onClick={save} disabled={saving || !dirty} className="btn-brand">{saving ? "Saving…" : "Save changes"}</button>
             {msg && <span className={`text-sm font-semibold ${msg.includes("✓") ? "text-teal" : "text-danger"}`}>{msg}</span>}
-            {dirty && !msg && <span className="text-sm text-inkmuted">Unsaved changes</span>}
+            {dirty && !msg && <span className="text-sm text-inkmuted">Autosaving…</span>}
+            {!dirty && !msg && !saving && <span className="text-sm text-inkmuted">All changes saved automatically</span>}
           </div>
         </div>
 

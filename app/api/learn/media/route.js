@@ -58,6 +58,23 @@ export async function POST(req) {
       }
     }
 
+    // Notes can carry MANY files — sign each and return them as an array.
+    if (lesson.type === "notes" && Array.isArray(lesson.files) && lesson.files.length) {
+      const ttl = isFreePreview && !isOwner ? PREVIEW_TTL : TTL;
+      const files = [];
+      for (const f of lesson.files) {
+        if (!f?.mediaPath) continue;
+        const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(f.mediaPath, ttl);
+        if (!error && data?.signedUrl) files.push({ url: data.signedUrl, fileName: f.fileName || "", fileType: f.fileType || "" });
+      }
+      return NextResponse.json({
+        files,
+        url: files[0]?.url || "",
+        allowDownload: lesson.allowDownload === true,
+        expiresIn: ttl
+      }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     const path = lesson.mediaPath || lesson.videoPath || lesson.filePath || lesson.audioPath;
 
     // Legacy lessons still point at a public URL. Hand it back unchanged so

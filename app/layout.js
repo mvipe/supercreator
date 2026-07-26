@@ -3,7 +3,12 @@ import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata = {
   title: "SuperCreators — sell courses, keep the upside",
-  description: "Build, price and sell your online course in minutes."
+  description: "Build, price and sell your online course in minutes.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png"
+  }
 };
 
 // Without this, phones render the page in a ~980px virtual viewport (the

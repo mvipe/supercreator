@@ -67,7 +67,7 @@ export default function StorePublic() {
 
   // Every outbound tap is logged so Clicks/CTR are measured, not guessed.
   const click = (targetType, targetId, label) =>
-    trackClick({ ownerId: profile.user_id, path: `/u/${username}`, targetType, targetId, label });
+    trackClick({ ownerId: profile.user_id, path: `/${username}`, targetType, targetId, label });
   const links = profile.links || [];
   const font = profile.font || "Inter";
   const twoCol = profile.column_layout === "double";
@@ -83,10 +83,15 @@ export default function StorePublic() {
     );
   }
 
+  // A custom uploaded background overrides the theme surface.
+  const bgStyle = profile.bg_image
+    ? { backgroundImage: `url(${profile.bg_image})`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundAttachment: "fixed" }
+    : themeSurface(t);
+
   return (
-    <main className="relative min-h-screen" style={{ ...themeSurface(t), fontFamily: `'${font}', sans-serif` }}>
-      <div className="pointer-events-none fixed inset-0 z-0" style={SHEEN} />
-      <VisitTracker ownerId={profile.user_id} path={`/u/${username}`} source="store" />
+    <main className="relative min-h-screen" style={{ ...bgStyle, fontFamily: `'${font}', sans-serif` }}>
+      {!profile.bg_image && <div className="pointer-events-none fixed inset-0 z-0" style={SHEEN} />}
+      <VisitTracker ownerId={profile.user_id} path={`/${username}`} source="store" />
       <div className="relative z-10 mx-auto max-w-xl px-4 pb-12 pt-16 text-center lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start lg:gap-10 lg:pb-14 lg:pt-24">
         {/* LEFT — profile card, sticky on desktop; stacked & centered on mobile */}
         <div className="text-center lg:sticky lg:top-24 lg:self-start lg:pt-2">

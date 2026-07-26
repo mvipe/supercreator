@@ -281,6 +281,19 @@ function CreatorsPanel() {
   const [warning, setWarning] = useState("");
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [detail, setDetail] = useState(null);       // { creator, totals, courses, products }
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailErr, setDetailErr] = useState("");
+
+  async function openDetail(c) {
+    setDetail({ creator: { name: c.full_name || c.display_name || c.username || "Creator", username: c.username, email: c.email } });
+    setDetailLoading(true); setDetailErr("");
+    try {
+      const res = await apiFetch(`/api/admin/creators/${c.user_id}`, undefined, "GET");
+      setDetail(res);
+    } catch (e) { setDetailErr(e.message); }
+    finally { setDetailLoading(false); }
+  }
 
   async function load() {
     setErr(""); setWarning("");
@@ -351,11 +364,11 @@ function CreatorsPanel() {
         {list.map((c) => (
           <div key={c.user_id} className="grid min-w-[860px] grid-cols-12 items-center gap-4 border-b border-line px-5 py-3.5 text-sm last:border-0">
             <div className="col-span-4 min-w-0">
-              <div className="flex items-center gap-2 truncate font-semibold">
+              <button onClick={() => openDetail(c)} className="flex items-center gap-2 truncate text-left font-semibold text-brand hover:underline" title="View stats">
                 {c.full_name || c.display_name || "—"}
                 {c.is_super_admin && <span className="pill bg-brand-soft text-brand">super</span>}
                 {c.isPro && <span className="pill bg-teal-soft text-teal">pro</span>}
-              </div>
+              </button>
               <div className="truncate text-xs text-inkmuted">
                 {c.username ? `@${c.username}` : "no store"}{c.business_name ? ` · ${c.business_name}` : ""}
                 {c.created_at ? ` · joined ${new Date(c.created_at).toLocaleDateString("en-IN")}` : ""}
@@ -376,7 +389,92 @@ function CreatorsPanel() {
           </div>
         ))}
       </div>
+
+      {/* Per-creator stats */}
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDetail(null)}>
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div className="min-w-0">
+                <h3 className="font-display text-xl font-bold">{detail.creator?.name}</h3>
+                <div className="truncate text-sm text-inkmuted">
+                  {detail.creator?.username ? `@${detail.creator.username}` : "no store"}
+                  {detail.creator?.email ? ` · ${detail.creator.email}` : ""}
+                  {detail.creator?.phone ? ` · +${String(detail.creator.phone).replace(/^\+/, "")}` : ""}
+                </div>
+              </div>
+              <button onClick={() => setDetail(null)} className="shrink-0 rounded-lg p-1 text-inkmuted hover:bg-paper" aria-label="Close">✕</button>
+            </div>
+
+            {detailLoading ? (
+              <div className="py-14 text-center text-sm text-inkmuted">Loading stats…</div>
+            ) : detailErr ? (
+              <div className="mt-4 rounded-[8px] bg-red-50 p-3 text-sm text-danger">{detailErr}</div>
+            ) : detail.totals ? (
+              <>
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat label="Courses" value={detail.totals.courses} />
+                  <Stat label="Products" value={detail.totals.products} />
+                  <Stat label="Total sales" value={detail.totals.totalSales} />
+                  <Stat label="Revenue" value={inr(detail.totals.totalRevenue)} />
+                </div>
+
+                <div className="mt-6">
+                  <div className="text-sm font-bold">Courses ({detail.courses.length})</div>
+                  {detail.courses.length === 0 ? (
+                    <p className="mt-1 text-sm text-inkmuted">No courses yet.</p>
+                  ) : (
+                    <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line">
+                      {detail.courses.map((c) => (
+                        <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                          <span className="min-w-0 flex-1 truncate">
+                            <span className="font-medium">{c.title}</span>
+                            <span className="ml-2 text-xs text-inkmuted">{c.lessons} lessons · {c.status}</span>
+                          </span>
+                          <span className="shrink-0 text-xs text-inkmuted">{c.sales} sales</span>
+                          <span className="w-24 shrink-0 text-right font-semibold">{inr(c.revenue)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {detail.products.length > 0 && (
+                  <div className="mt-6">
+                    <div className="text-sm font-bold">Other products ({detail.products.length})</div>
+                    <div className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line">
+                      {detail.products.map((p) => (
+                        <div key={`${p.type}-${p.id}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                          <span className="min-w-0 flex-1 truncate">
+                            <span className="font-medium">{p.title}</span>
+                            <span className="ml-2 rounded bg-paper px-1.5 py-0.5 text-[10px] uppercase text-inkmuted">{p.type}</span>
+                          </span>
+                          <span className="shrink-0 text-xs text-inkmuted">{p.sales} sales</span>
+                          <span className="w-24 shrink-0 text-right font-semibold">{inr(p.revenue)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {detail.totals.bookingSales > 0 && (
+                  <p className="mt-4 text-sm text-inkmuted">Bookings: {detail.totals.bookingSales} · {inr(detail.totals.bookingRevenue)}</p>
+                )}
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-xl border border-line bg-paper px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-inkmuted">{label}</div>
+      <div className="mt-1 font-display text-xl font-bold">{value}</div>
+    </div>
   );
 }
 
