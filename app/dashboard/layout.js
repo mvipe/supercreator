@@ -8,6 +8,9 @@ import { useAuth } from "@/components/AuthProvider";
 import { I, ICONS } from "@/components/dashboard/Icons";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import SupportButton from "@/components/SupportButton";
+import { TEAM_PERMISSIONS, can } from "@/lib/team";
+
+const PERM_BY_PATH = Object.fromEntries(TEAM_PERMISSIONS.map((p) => [p.path, p.key]));
 
 const MAIN = [
   { href: "/dashboard", label: "Getting Started", icon: ICONS.home },
@@ -28,7 +31,15 @@ const APPS = [
 ];
 
 export default function DashLayout({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, permissions, isTeamMember } = useAuth();
+
+  // Sub-admins only see the sections their owner granted (home always shows).
+  const allowed = (href) => {
+    if (!isTeamMember) return true;
+    if (href === "/dashboard" || href === "/dashboard/apps") return true;
+    const key = PERM_BY_PATH[href];
+    return key ? can(permissions, key) : false;
+  };
   const r = useRouter();
   const path = usePathname();
   const ensured = useRef(false);
@@ -97,7 +108,8 @@ export default function DashLayout({ children }) {
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
-          {MAIN.map((n) => <NavLink key={`m-${n.href}`} n={n} onClick={() => setMobileNavOpen(false)} />)}
+          {MAIN.filter((n) => allowed(n.href)).map((n) => <NavLink key={`m-${n.href}`} n={n} onClick={() => setMobileNavOpen(false)} />)}
+          {!isTeamMember && <NavLink n={{ href: "/dashboard/team", label: "Sub-Admins", icon: ICONS.audience }} onClick={() => setMobileNavOpen(false)} />}
           {isAdmin && (
             <Link href="/admin" onClick={() => setMobileNavOpen(false)}
               className={`flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition-colors ${path.startsWith("/admin") ? "bg-brand text-white" : "hover:bg-white/5"}`}
@@ -106,7 +118,7 @@ export default function DashLayout({ children }) {
             </Link>
           )}
           <div className="px-3 pb-1 pt-5 text-[11px] font-bold uppercase tracking-wider text-white/35">Your apps</div>
-          {APPS.map((n) => <NavLink key={`m-app-${n.href}`} n={n} onClick={() => setMobileNavOpen(false)} />)}
+          {APPS.filter((n) => allowed(n.href)).map((n) => <NavLink key={`m-app-${n.href}`} n={n} onClick={() => setMobileNavOpen(false)} />)}
           <Link href="/dashboard/apps" onClick={() => setMobileNavOpen(false)}
             className="mt-2 flex items-center justify-center gap-2 rounded-[10px] border border-white/15 px-3 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5">
             <I d={ICONS.apps} size={15} /> Explore All Apps
@@ -120,7 +132,8 @@ export default function DashLayout({ children }) {
           <span className="font-display text-lg"><b className="font-bold">Super</b>Creators</span>
         </Link>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
-          {MAIN.map((n) => <NavLink key={n.href} n={n} />)}
+          {MAIN.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} />)}
+          {!isTeamMember && <NavLink n={{ href: "/dashboard/team", label: "Sub-Admins", icon: ICONS.audience }} />}
           {isAdmin && (
             <Link href="/admin"
               className={`flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition-colors ${path.startsWith("/admin") ? "bg-brand text-white" : "hover:bg-white/5"}`}
@@ -129,7 +142,7 @@ export default function DashLayout({ children }) {
             </Link>
           )}
           <div className="px-3 pb-1 pt-5 text-[11px] font-bold uppercase tracking-wider text-white/35">Your apps</div>
-          {APPS.map((n) => <NavLink key={n.href} n={n} />)}
+          {APPS.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} />)}
           <Link href="/dashboard/apps"
             className="mt-2 flex items-center justify-center gap-2 rounded-[10px] border border-white/15 px-3 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5">
             <I d={ICONS.apps} size={15} /> Explore All Apps

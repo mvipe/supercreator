@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest, isBlocked, kycStatus } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isBlocked, kycStatus, getActiveOwnerId } from "@/lib/supabaseAdmin";
 
 const MIN_PAYOUT_PAISE = 10000; // ₹100
 
@@ -12,11 +12,12 @@ async function availablePaise(creatorId) {
 export async function POST(req) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
-    if (await isBlocked(user.id)) return NextResponse.json({ error: "Your account is currently restricted. Contact support." }, { status: 403 });
+    if (await isBlocked(ownerId)) return NextResponse.json({ error: "Your account is currently restricted. Contact support." }, { status: 403 });
 
     // KYC gate — must be verified before any payout.
-    const kyc = await kycStatus(user.id);
+    const kyc = await kycStatus(ownerId);
     if (kyc !== "verified") {
       const reason = kyc === "under_review" ? "Your KYC is under review. You can request a payout once it's verified."
         : kyc === "rejected" ? "Your KYC was rejected. Please correct and resubmit it before requesting a payout."
@@ -36,18 +37,18 @@ export async function POST(req) {
 
     // Block a second pending request while one is still open.
     const { data: open } = await supabaseAdmin.from("mp_payouts").select("id")
-      .eq("creator_id", user.id).in("status", ["requested", "approved", "processing"]).maybeSingle();
+      .eq("creator_id", ownerId).in("status", ["requested", "approved", "processing"]).maybeSingle();
     if (open) return NextResponse.json({ error: "You already have a payout in progress." }, { status: 409 });
 
-    const available = await availablePaise(user.id);
+    const available = await availablePaise(ownerId);
     if (paise > available) return NextResponse.json({ error: `You can withdraw up to ₹${(available / 100).toLocaleString("en-IN")}.` }, { status: 400 });
 
     const { data, error } = await supabaseAdmin.from("mp_payouts").insert({
-      creator_id: user.id, amount: paise, method: m, creator_note: note || null, status: "requested"
+      creator_id: ownerId, amount: paise, method: m, creator_note: note || null, status: "requested"
     }).select("*").single();
     if (error) throw error;
 
-    await supabaseAdmin.from("mp_profiles").update({ payout_method: m }).eq("user_id", user.id);
+    await supabaseAdmin.from("mp_profiles").update({ payout_method: m }).eq("user_id", ownerId);
     return NextResponse.json({ payout: data });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

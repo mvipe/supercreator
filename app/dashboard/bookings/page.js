@@ -9,7 +9,7 @@ const TABS = ["Bookings", "Sessions", "Responses", "Settings"];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function Bookings() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [tab, setTab] = useState("Bookings");
   const [sessions, setSessions] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -37,13 +37,13 @@ export default function Bookings() {
 
   async function load() {
     const [{ data: s }, { data: b }, { data: a }, { data: p }] = await Promise.all([
-      supabase.from("mp_sessions").select("*").eq("owner_id", user.id).order("position"),
-      supabase.from("mp_bookings").select("*").eq("owner_id", user.id).order("starts_at", { ascending: false }),
-      supabase.from("mp_availability").select("*").eq("owner_id", user.id).maybeSingle(),
-      supabase.from("mp_profiles").select("username").eq("user_id", user.id).maybeSingle()
+      supabase.from("mp_sessions").select("*").eq("owner_id", ownerId).order("position"),
+      supabase.from("mp_bookings").select("*").eq("owner_id", ownerId).order("starts_at", { ascending: false }),
+      supabase.from("mp_availability").select("*").eq("owner_id", ownerId).maybeSingle(),
+      supabase.from("mp_profiles").select("username").eq("user_id", ownerId).maybeSingle()
     ]);
     setSessions(s || []); setBookings(b || []); setProfile(p);
-    setAvail(a || { owner_id: user.id, timezone: "Asia/Kolkata", days: Object.fromEntries([0,1,2,3,4,5,6].map(i => [String(i), { on: i >= 1 && i <= 5, ranges: [["09:00", "17:00"]] }])) });
+    setAvail(a || { owner_id: ownerId, timezone: "Asia/Kolkata", days: Object.fromEntries([0,1,2,3,4,5,6].map(i => [String(i), { on: i >= 1 && i <= 5, ranges: [["09:00", "17:00"]] }])) });
   }
   useEffect(() => { if (user) load(); }, [user]);
 
@@ -57,7 +57,7 @@ export default function Bookings() {
 
   async function addSession() {
     const { error } = await supabase.from("mp_sessions").insert({
-      owner_id: user.id, title: "New session", duration_min: 30, price: 0, description: "", position: sessions.length
+      owner_id: ownerId, title: "New session", duration_min: 30, price: 0, description: "", position: sessions.length
     });
     if (error) alert(error.message); else load();
   }
@@ -97,7 +97,7 @@ export default function Bookings() {
     setBusyId(s.id); setSessionMsg("");
     try {
       const { error } = await supabase.from("mp_sessions").insert({
-        owner_id: user.id, title: `${s.title} (copy)`, description: s.description || "",
+        owner_id: ownerId, title: `${s.title} (copy)`, description: s.description || "",
         duration_min: s.duration_min, price: s.price, active: false, position: sessions.length
       });
       if (error) throw error;

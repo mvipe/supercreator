@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
 import { rangeDays, bucketFor, countryName } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +51,7 @@ function tally(rows, keyFn) {
 export async function GET(req) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
     const url = new URL(req.url);
@@ -88,12 +89,12 @@ export async function GET(req) {
 
     let vq = supabaseAdmin.from("mp_visits")
       .select("visitor_id, source, referrer_host, country_code, country, city, device, browser, path, created_at")
-      .eq("owner_id", user.id).order("created_at", { ascending: true }).limit(MAX_ROWS);
+      .eq("owner_id", ownerId).order("created_at", { ascending: true }).limit(MAX_ROWS);
     let cq = supabaseAdmin.from("mp_clicks")
       .select("visitor_id, source, country_code, country, city, device, target_type, target_id, label, created_at")
-      .eq("owner_id", user.id).order("created_at", { ascending: true }).limit(MAX_ROWS);
+      .eq("owner_id", ownerId).order("created_at", { ascending: true }).limit(MAX_ROWS);
     let pq = supabaseAdmin.from("mp_purchases")
-      .select("amount, creator_amount, created_at").eq("owner_id", user.id);
+      .select("amount, creator_amount, created_at").eq("owner_id", ownerId);
 
     if (bounded) {
       const fromIso = from.toISOString();

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
 
 // Per-course sales + revenue for the signed-in creator (service role — bypasses RLS timing).
 export async function GET(req) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
     const { data: purchases } = await supabaseAdmin.from("mp_purchases")
-      .select("product_id, amount").eq("owner_id", user.id).eq("product_type", "course");
+      .select("product_id, amount").eq("owner_id", ownerId).eq("product_type", "course");
 
     const perCourse = {};
     for (const p of purchases || []) {

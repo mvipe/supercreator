@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 export default function SubmissionsPage() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const r = useRouter();
   
   const [course, setCourse] = useState(null);
@@ -27,7 +27,7 @@ export default function SubmissionsPage() {
         .from("mp_courses")
         .select("*")
         .eq("id", id)
-        .eq("owner_id", user.id)
+        .eq("owner_id", ownerId)
         .maybeSingle();
 
       if (!courseData) {

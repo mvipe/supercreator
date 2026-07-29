@@ -55,11 +55,28 @@ export async function GET(req) {
   const staff = superAdmin || await isStaff(user).catch(() => false);
   const admin = prof?.plan === "admin" || prof?.plan === "superadmin" || isAdmin(user) || staff;
 
+  // Team context: if this account is a sub-admin, it acts inside its owner's
+  // workspace with a limited permission set. Owners get ownerId = their own id
+  // and permissions = null (full access).
+  let team = null;
+  try {
+    const { data } = await supabaseAdmin.from("mp_team_members")
+      .select("owner_id, permissions, active").eq("member_id", user.id).maybeSingle();
+    if (data) team = data;
+  } catch { /* table not migrated yet — treat as a normal owner */ }
+  const isTeamMember = !!team;
+  const ownerId = isTeamMember ? team.owner_id : user.id;
+  const permissions = isTeamMember ? (team.active === false ? [] : (team.permissions || [])) : null;
+
   return noStore({
     signedIn: true,
     admin,
     superAdmin,
     staff,
+    isTeamMember,
+    ownerId,
+    permissions,
+    teamActive: isTeamMember ? team.active !== false : true,
     isPro: isProProfile(prof),
     plan: prof?.plan || "free",
     planExpiresAt: prof?.plan_expires_at || null,

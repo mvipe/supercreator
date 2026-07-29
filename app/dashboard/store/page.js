@@ -12,7 +12,7 @@ import StorePreview from "@/components/store/StorePreview";
 const TABS = ["Store", "Analytics", "Appearance", "Settings"];
 
 export default function StorePage() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [p, setP] = useState(null);
   const [tab, setTab] = useState("Store");
   const [dirty, setDirty] = useState(false);
@@ -24,10 +24,10 @@ export default function StorePage() {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("mp_profiles").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
-      setP(data || { user_id: user.id, socials: {}, links: [], theme: "classic", brand_color: "#2E6EF7", font: "Inter", column_layout: "single" });
+    supabase.from("mp_profiles").select("*").eq("user_id", ownerId).maybeSingle().then(({ data }) => {
+      setP(data || { user_id: ownerId, socials: {}, links: [], theme: "classic", brand_color: "#2E6EF7", font: "Inter", column_layout: "single" });
     });
-    supabase.from("mp_sessions").select("id", { count: "exact", head: true }).eq("owner_id", user.id).eq("active", true)
+    supabase.from("mp_sessions").select("id", { count: "exact", head: true }).eq("owner_id", ownerId).eq("active", true)
       .then(({ count }) => setHasSessions((count || 0) > 0));
   }, [user]);
 
@@ -49,7 +49,7 @@ export default function StorePage() {
   async function save() {
     setSaving(true);
     const base = {
-      user_id: user.id,
+      user_id: ownerId,
       username: p.username || null,
       display_name: p.display_name || "",
       bio: p.bio || "",

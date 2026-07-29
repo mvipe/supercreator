@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { heroSurface, SHEEN } from "@/lib/texture";
 
 export default function Refer() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [code, setCode] = useState("");
   const [count, setCount] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -13,7 +13,7 @@ export default function Refer() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: prof } = await supabase.from("mp_profiles").select("referral_code").eq("user_id", user.id).maybeSingle();
+      const { data: prof } = await supabase.from("mp_profiles").select("referral_code").eq("user_id", ownerId).maybeSingle();
       const c = prof?.referral_code || "";
       setCode(c);
       if (c) {

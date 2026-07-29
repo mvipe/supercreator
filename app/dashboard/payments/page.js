@@ -39,7 +39,7 @@ export default function Payments() {
 
 /* ---------------- TRANSACTIONS ---------------- */
 function Transactions() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [rows, setRows] = useState([]);
   const [seller, setSeller] = useState({});
   const [filter, setFilter] = useState("all");
@@ -184,14 +184,14 @@ function Account() {
 }
 
 function ProfilePanel() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [p, setP] = useState(null);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("mp_profiles").select("full_name,business_name,email,profession,display_name").eq("user_id", user.id).maybeSingle()
+    supabase.from("mp_profiles").select("full_name,business_name,email,profession,display_name").eq("user_id", ownerId).maybeSingle()
       .then(({ data }) => setP(data || {}));
   }, [user]);
   if (!p) return <div className="text-sm text-inkmuted">Loading…</div>;
@@ -218,14 +218,14 @@ function ProfilePanel() {
 }
 
 function PayoutPanel() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [m, setM] = useState(null);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("mp_profiles").select("payout_method").eq("user_id", user.id).maybeSingle()
+    supabase.from("mp_profiles").select("payout_method").eq("user_id", ownerId).maybeSingle()
       .then(({ data }) => setM(data?.payout_method?.type ? data.payout_method : { type: "upi", upi: "", account: "", ifsc: "", holder: "" }));
   }, [user]);
   if (!m) return <div className="text-sm text-inkmuted">Loading…</div>;
@@ -233,7 +233,7 @@ function PayoutPanel() {
   async function save() {
     setSaving(true); setMsg("");
     const payload = m.type === "upi" ? { type: "upi", upi: m.upi } : { type: "bank", account: m.account, ifsc: (m.ifsc || "").toUpperCase(), holder: m.holder };
-    const { error } = await supabase.from("mp_profiles").update({ payout_method: payload }).eq("user_id", user.id);
+    const { error } = await supabase.from("mp_profiles").update({ payout_method: payload }).eq("user_id", ownerId);
     setSaving(false); setMsg(error ? error.message : "Saved ✓");
   }
   return (
@@ -275,7 +275,7 @@ const KYC_BADGE = {
 };
 
 function KycPanel() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [k, setK] = useState(null);
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);

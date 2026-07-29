@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
 
 const nameFromAnswers = (answers) =>
   (answers || []).find((a) => /name/i.test(a.label || ""))?.value?.trim() || null;
@@ -7,12 +7,13 @@ const nameFromAnswers = (answers) =>
 export async function GET(req) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
     const [{ data: purchases }, { data: bookings }, { data: visits }] = await Promise.all([
-      supabaseAdmin.from("mp_purchases").select("product_type,product_id,amount,buyer_id,buyer_phone,answers,coupon,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
-      supabaseAdmin.from("mp_bookings").select("session_id,amount,buyer_id,buyer_phone,answers,status,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
-      supabaseAdmin.from("mp_visits").select("path,ref,visitor_id,buyer_phone,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }).limit(3000)
+      supabaseAdmin.from("mp_purchases").select("product_type,product_id,amount,buyer_id,buyer_phone,answers,coupon,created_at").eq("owner_id", ownerId).order("created_at", { ascending: false }),
+      supabaseAdmin.from("mp_bookings").select("session_id,amount,buyer_id,buyer_phone,answers,status,created_at").eq("owner_id", ownerId).order("created_at", { ascending: false }),
+      supabaseAdmin.from("mp_visits").select("path,ref,visitor_id,buyer_phone,created_at").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(3000)
     ]);
 
     // Resolve product titles.

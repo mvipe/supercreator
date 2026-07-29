@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +12,15 @@ const PRODUCT_TYPES = ["event", "locked", "payment", "book"];
 export async function GET(req) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
     const [{ data: purchases, error: pErr }, { data: bookings, error: bErr }, { data: profile }] = await Promise.all([
-      supabaseAdmin.from("mp_purchases").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }),
-      supabaseAdmin.from("mp_bookings").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }),
+      supabaseAdmin.from("mp_purchases").select("*").eq("owner_id", ownerId).order("created_at", { ascending: false }),
+      supabaseAdmin.from("mp_bookings").select("*").eq("owner_id", ownerId).order("created_at", { ascending: false }),
       supabaseAdmin.from("mp_profiles")
         .select("full_name, display_name, business_name, email, phone_number, username")
-        .eq("user_id", user.id).maybeSingle()
+        .eq("user_id", ownerId).maybeSingle()
     ]);
     if (pErr) throw pErr;
     if (bErr) throw bErr;

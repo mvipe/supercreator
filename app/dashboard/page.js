@@ -64,7 +64,7 @@ const IconArrow = (p) => (
 /* ---------------- page ---------------- */
 
 export default function GettingStarted() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [name, setName] = useState("");
   const [me, setMe] = useState(null);
   const [stats, setStats] = useState(null);
@@ -78,7 +78,7 @@ export default function GettingStarted() {
     if (!user) return;
     const { data: prof } = await supabase
       .from("mp_profiles").select("full_name, display_name, business_name, profile_complete")
-      .eq("user_id", user.id).maybeSingle();
+      .eq("user_id", ownerId).maybeSingle();
     setName(prof?.business_name || prof?.full_name || prof?.display_name || "");
     setProfileDone(!!prof?.profile_complete);
     loadPlan();

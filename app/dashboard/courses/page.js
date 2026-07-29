@@ -10,7 +10,7 @@ import { StatsHero } from "@/components/dashboard/Hub";
 const TABS = ["published", "unpublished", "draft"];
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const r = useRouter();
   const [courses, setCourses] = useState([]);
   const [perCourse, setPerCourse] = useState({}); // { courseId: {sales, revenue} }
@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
 
   async function load() {
-    const { data: rows } = await supabase.from("mp_courses").select("*").eq("owner_id", user.id).order("updated_at", { ascending: false });
+    const { data: rows } = await supabase.from("mp_courses").select("*").eq("owner_id", ownerId).order("updated_at", { ascending: false });
     setCourses((rows || []).map(fromRow));
     try {
       const { perCourse } = await apiFetch("/api/courses/stats", undefined, "GET");
@@ -43,7 +43,7 @@ export default function Dashboard() {
   async function create() {
     setCreating(true);
     const { data, error } = await supabase.from("mp_courses").insert({
-      owner_id: user.id,
+      owner_id: ownerId,
       title: DEFAULTS.title,
       status: "draft",
       cover_images: DEFAULTS.coverImages,

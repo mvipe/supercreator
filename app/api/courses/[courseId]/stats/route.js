@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
 
 const nameFromAnswers = (answers) =>
   (answers || []).find((a) => /name/i.test(a.label || ""))?.value?.trim() || null;
@@ -7,16 +7,17 @@ const nameFromAnswers = (answers) =>
 export async function GET(req, { params }) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
 
     const courseId = params?.courseId;
     if (!courseId) return NextResponse.json({ error: "Missing course id." }, { status: 400 });
 
     const [{ data: course, error: courseError }, { data: purchases, error: purchasesError }] = await Promise.all([
-      supabaseAdmin.from("mp_courses").select("id,title").eq("id", courseId).eq("owner_id", user.id).maybeSingle(),
+      supabaseAdmin.from("mp_courses").select("id,title").eq("id", courseId).eq("owner_id", ownerId).maybeSingle(),
       supabaseAdmin.from("mp_purchases")
         .select("id,amount,buyer_id,buyer_phone,answers,coupon,created_at")
-        .eq("owner_id", user.id)
+        .eq("owner_id", ownerId)
         .eq("product_type", "course")
         .eq("product_id", courseId)
         .order("created_at", { ascending: false })

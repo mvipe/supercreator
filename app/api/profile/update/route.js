@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
 
 // Save the "complete your profile" details.
 export async function POST(req) {
   try {
     const user = await getUserFromRequest(req);
+    const ownerId = await getActiveOwnerId(user);
     if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
     const b = await req.json();
 
@@ -21,7 +22,7 @@ export async function POST(req) {
       display_name: full_name,          // keep display name in sync
       profile_complete: true
     };
-    const { error } = await supabaseAdmin.from("mp_profiles").update(patch).eq("user_id", user.id);
+    const { error } = await supabaseAdmin.from("mp_profiles").update(patch).eq("user_id", ownerId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {

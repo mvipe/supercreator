@@ -15,7 +15,7 @@ const STATUS_STYLE = {
 };
 
 export default function Payouts() {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const [available, setAvailable] = useState(0);   // paise
   const [rows, setRows] = useState([]);
   const [kyc, setKyc] = useState("not_started");
@@ -29,8 +29,8 @@ export default function Payouts() {
   async function load() {
     const [{ data: bal }, { data: prof }, { data: pay }] = await Promise.all([
       supabase.rpc("mp_available_balance"),
-      supabase.from("mp_profiles").select("payout_method, kyc_status").eq("user_id", user.id).maybeSingle(),
-      supabase.from("mp_payouts").select("*").eq("creator_id", user.id).order("requested_at", { ascending: false })
+      supabase.from("mp_profiles").select("payout_method, kyc_status").eq("user_id", ownerId).maybeSingle(),
+      supabase.from("mp_payouts").select("*").eq("creator_id", ownerId).order("requested_at", { ascending: false })
     ]);
     setAvailable(Number(bal || 0));
     setRows(pay || []);

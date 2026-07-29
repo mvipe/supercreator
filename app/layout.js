@@ -2,7 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata = {
-  title: "SuperCreators — Ultimate Toolkit for Creators",
+  title: "SuperCreators — sell courses, keep the upside",
   description: "Build, price and sell your online course in minutes.",
   icons: {
     icon: "/favicon.png",
