@@ -84,7 +84,7 @@ export default function CreateProductModal({ open, onClose }) {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto overscroll-contain p-4 pt-14 sm:items-center sm:pt-4"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
           onClick={onClose}

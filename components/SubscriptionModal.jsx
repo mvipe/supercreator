@@ -122,7 +122,7 @@ export default function SubscriptionModal({ onClose, onSuccess, onFree }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-t-2xl bg-white sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="relative overflow-hidden px-6 pb-5 pt-7 text-white" style={heroSurface()}>
           <div className="flex items-start justify-between">
             <div>

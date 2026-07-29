@@ -255,7 +255,7 @@ function TrendChart({ series, bucket }) {
 const isoDay = (d) => new Date(d).toISOString().slice(0, 10);
 
 export default function StoreAnalytics() {
-  const [range, setRange] = useState("30d");
+  const [range, setRange] = useState("month");
   const [customFrom, setCustomFrom] = useState(isoDay(Date.now() - 6 * 86400000));
   const [customTo, setCustomTo] = useState(isoDay(Date.now()));
   const [data, setData] = useState(null);
@@ -324,7 +324,9 @@ export default function StoreAnalytics() {
           <p className="text-sm text-inkmuted">Where your visitors come from, and what they do.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Toggle options={RANGES.map((r) => ({ id: r.id, label: r.label }))} value={range} onChange={setRange} />
+          <select className="input h-9 w-auto py-0 text-sm font-semibold" value={range} onChange={(e) => setRange(e.target.value)}>
+            {RANGES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
           {range === "custom" && (
             <div className="flex items-center gap-1.5 text-xs text-inkmuted">
               <input type="date" value={customFrom} max={customTo || undefined}
