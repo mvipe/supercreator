@@ -11,7 +11,7 @@ import { useAuth } from "@/components/AuthProvider";
 const TABS = ["published", "unpublished", "draft"];
 
 export default function ProductHub({ type, title, subtitle, ctaLabel }) {
-  const { user } = useAuth();
+  const { user, ownerId } = useAuth();
   const r = useRouter();
   const [rows, setRows] = useState([]);
   const [sales, setSales] = useState([]);
@@ -20,9 +20,9 @@ export default function ProductHub({ type, title, subtitle, ctaLabel }) {
   const [menuFor, setMenuFor] = useState(null);
 
   async function load() {
-    const { data } = await supabase.from("mp_products").select("*").eq("owner_id", user.id).eq("type", type).order("updated_at", { ascending: false });
+    const { data } = await supabase.from("mp_products").select("*").eq("owner_id", ownerId).eq("type", type).order("updated_at", { ascending: false });
     setRows(data || []);
-    const { data: p } = await supabase.from("mp_purchases").select("product_id, amount").eq("owner_id", user.id).eq("product_type", type);
+    const { data: p } = await supabase.from("mp_purchases").select("product_id, amount").eq("owner_id", ownerId).eq("product_type", type);
     setSales(p || []);
   }
   useEffect(() => { if (user) load(); }, [user]);
@@ -43,7 +43,7 @@ export default function ProductHub({ type, title, subtitle, ctaLabel }) {
 
   async function create() {
     const d = PRODUCT_DEFAULTS[type];
-    const { data, error } = await supabase.from("mp_products").insert({ owner_id: user.id, type, title: d.title, status: "draft", data: d.data }).select("id").single();
+    const { data, error } = await supabase.from("mp_products").insert({ owner_id: ownerId, type, title: d.title, status: "draft", data: d.data }).select("id").single();
     if (error) return alert(error.message);
     r.push(`/studio/${type}/${data.id}`);
   }
