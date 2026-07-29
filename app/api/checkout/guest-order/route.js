@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { supabaseAdmin, getUserFromRequest, isBlocked } from "@/lib/supabaseAdmin";
-import { productPrice, productChargeRupees } from "@/lib/products";
+import { productPrice, productChargeRupees, findProductCoupon } from "@/lib/products";
 
 // =============================================================
 // Guest-capable checkout for COURSES (+ one optional add-on product) and for
@@ -128,6 +128,13 @@ export async function POST(req) {
       if (!data) return NextResponse.json({ error: "Product not found." }, { status: 404 });
       productRow = data; ownerId = data.owner_id;
       basePaise = productAmountPaise(productType, data.data || {}, body);
+      // Apply a product coupon if the buyer entered a valid one.
+      if (body.coupon && basePaise > 0) {
+        const c = findProductCoupon(data.data || {}, body.coupon);
+        if (!c) return NextResponse.json({ error: "That coupon code isn't valid." }, { status: 400 });
+        basePaise = Math.round(basePaise * (1 - c.percentOff / 100));
+        applied = c.code;
+      }
     }
     if (await isBlocked(ownerId)) return NextResponse.json({ error: "This store is currently unavailable." }, { status: 403 });
 

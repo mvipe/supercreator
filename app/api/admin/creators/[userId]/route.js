@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest, isSuperAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req, { params }) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
-  if (!(await isSuperAdmin(user))) return NextResponse.json({ error: "Super admins only." }, { status: 403 });
+  if (!(await isStaff(user))) return NextResponse.json({ error: "Admins only." }, { status: 403 });
 
   const userId = params.userId;
   try {

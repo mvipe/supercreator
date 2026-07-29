@@ -59,7 +59,10 @@ export async function GET(req) {
     // Resolve the [from, to] window. Most ranges are a rolling N-day window;
     // "yesterday" is the previous calendar day; "custom" takes explicit bounds.
     let from, to, bucket;
-    if (range === "yesterday") {
+    if (range === "today") {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      from = start; to = new Date(); bucket = bucketFor("today");
+    } else if (range === "yesterday") {
       const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - 1);
       const end = new Date(start); end.setDate(end.getDate() + 1);
       from = start; to = end; bucket = bucketFor("yesterday");

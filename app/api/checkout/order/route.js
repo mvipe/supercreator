@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { supabaseAdmin, getUserFromRequest, isBlocked } from "@/lib/supabaseAdmin";
-import { productChargeRupees } from "@/lib/products";
+import { productChargeRupees, findProductCoupon } from "@/lib/products";
 
 async function loadProduct(productType, productId) {
   if (productType === "course") {
@@ -33,10 +33,17 @@ function computeAmountPaise(productType, loaded, body) {
   }
   if (productType === "booking") return { amount: Math.round((Number(loaded.session.price) || 0) * 100), applied: null };
   const d = loaded.product.data || {};
-  // event/locked/book/payment: honour free, pwyw and the "Offer discounted price" toggle.
+  // event/locked/book/payment: honour free, pwyw, discount AND coupons.
   if (["event", "locked", "book", "payment"].includes(productType)) {
-    const rupees = productChargeRupees(productType, d, { pwywAmount: body.pwywAmount });
-    return { amount: Math.round(rupees * 100), applied: null };
+    let rupees = productChargeRupees(productType, d, { pwywAmount: body.pwywAmount });
+    let applied = null;
+    if (body.coupon && rupees > 0) {
+      const c = findProductCoupon(d, body.coupon);
+      if (!c) return { error: "That coupon code isn't valid." };
+      rupees = Math.round(rupees * (1 - c.percentOff / 100));
+      applied = c.code;
+    }
+    return { amount: Math.round(rupees * 100), applied };
   }
   return { error: "Unknown product type" };
 }

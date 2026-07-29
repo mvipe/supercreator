@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest, isAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
 
 const NEXT_STATUS = ["approved", "processing", "paid", "rejected"];
 
 async function requireAdmin(req) {
   const user = await getUserFromRequest(req);
   if (!user) return { error: "Please sign in first.", status: 401 };
-  if (!isAdmin(user)) return { error: "Not authorized.", status: 403 };
+  if (!(await isStaff(user))) return { error: "Not authorized.", status: 403 };
   return { user };
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { productChargeRupees, findProductCoupon } from "@/lib/products";
 
 // Public price quote so the checkout modal can show the live total
 // (base price, coupon discount, PWYW) before payment.
@@ -25,15 +26,18 @@ export async function POST(req) {
       return NextResponse.json({ base, final, applied, couponError });
     }
 
-    // Other types: no coupons; just echo the base for display.
+    // Products (book/event/locked/payment): honour discount, pwyw AND coupons.
     const { data: p } = await supabaseAdmin.from("mp_products").select("type,data").eq("id", productId).eq("status", "published").maybeSingle();
     if (p) {
       const d = p.data || {};
-      let base = 0;
-      if (p.type === "event") base = d.priceMode === "free" ? 0 : Number(d.price) || 0;
-      else if (p.type === "locked") base = Number(d.price) || 0;
-      else if (p.type === "payment") base = d.priceMode === "pwyw" ? Math.max(Number(d.minPrice) || 1, Number(pwywAmount) || 0) : Number(d.price) || 0;
-      return NextResponse.json({ base, final: base, applied: null, couponError: null });
+      const base = Math.round(productChargeRupees(p.type, d, { pwywAmount }));
+      let final = base, applied = null, couponError = null;
+      if (coupon && base > 0) {
+        const found = findProductCoupon(d, coupon);
+        if (!found) couponError = "That coupon code isn't valid.";
+        else { final = Math.round(base * (1 - found.percentOff / 100)); applied = found.code; }
+      }
+      return NextResponse.json({ base, final, applied, couponError });
     }
     const { data: s } = await supabaseAdmin.from("mp_sessions").select("price").eq("id", productId).maybeSingle();
     if (s) return NextResponse.json({ base: Number(s.price) || 0, final: Number(s.price) || 0, applied: null, couponError: null });

@@ -1,4 +1,4 @@
-import { supabaseAdmin, getUserFromRequest, isAdmin, isSuperAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
 import { NextResponse } from "next/server";
 
 async function columnExists(columnName) {
@@ -31,7 +31,7 @@ export async function GET(req) {
       .eq("user_id", user.id)
       .single();
 
-    const isAdminUser = profile?.plan === "admin" || profile?.plan === "superadmin" || await isAdmin(user) || await isSuperAdmin(user);
+    const isAdminUser = profile?.plan === "admin" || profile?.plan === "superadmin" || await isStaff(user);
     if (!isAdminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -64,7 +64,7 @@ export async function POST(req) {
       .eq("user_id", user.id)
       .single();
 
-    const isAdminUser = profile?.plan === "admin" || profile?.plan === "superadmin" || await isAdmin(user) || await isSuperAdmin(user);
+    const isAdminUser = profile?.plan === "admin" || profile?.plan === "superadmin" || await isStaff(user);
     if (!isAdminUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

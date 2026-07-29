@@ -132,8 +132,8 @@ export default function GettingStarted() {
 
         {/* ---------- quick actions ---------- */}
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <QuickAction onClick={() => setShowCreate(true)} label="Create a product" tint="#F1F3F7" fg="#3D4453"><IconPlus className="h-5 w-5" /></QuickAction>
-          <QuickAction href="/dashboard/store" label="Edit your store" tint="#EAF1FE" fg="#2E6EF7"><IconGlobe className="h-5 w-5" /></QuickAction>
+          <QuickAction onClick={() => setShowCreate(true)} label="Create your store" tint="#F1F3F7" fg="#3D4453"><IconPlus className="h-5 w-5" /></QuickAction>
+          <QuickAction href="/dashboard/store" label="Edit your profile" tint="#EAF1FE" fg="#2E6EF7"><IconGlobe className="h-5 w-5" /></QuickAction>
           <QuickAction href="/dashboard/refer" label="Refer and Earn" tint="#FFF1E6" fg="#E07B39"><IconRupee className="h-5 w-5" /></QuickAction>
         </div>
 

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest, isSuperAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isSuperAdmin, isStaff } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
-async function requireSuper(req) {
+// Any admin (super or sub-admin) may view/manage creators.
+async function requireStaff(req) {
   const user = await getUserFromRequest(req);
   if (!user) return { error: "Please sign in first.", status: 401 };
-  if (!(await isSuperAdmin(user))) return { error: "Super admins only.", status: 403 };
+  if (!(await isStaff(user))) return { error: "Admins only.", status: 403 };
   return { user };
 }
 
@@ -14,11 +15,14 @@ async function requireSuper(req) {
 // on a migration, a single missing column used to make the whole select fail
 // and the route quietly returned an empty list — which looked exactly like
 // "no creators registered". Fall back to a minimal select instead.
-const FULL_SELECT = "user_id, username, display_name, full_name, business_name, email, phone_number, blocked, is_super_admin, plan, plan_expires_at, created_at";
+// Column sets in decreasing richness. FULL includes is_admin (needs
+// subadmin.sql); RICH is everything except that; SAFE is the bare minimum.
+const FULL_SELECT = "user_id, username, display_name, full_name, business_name, email, phone_number, blocked, is_super_admin, is_admin, plan, plan_expires_at, created_at";
+const RICH_SELECT = "user_id, username, display_name, full_name, business_name, email, phone_number, blocked, is_super_admin, plan, plan_expires_at, created_at";
 const SAFE_SELECT = "user_id, username, display_name, created_at";
 
 export async function GET(req) {
-  const auth = await requireSuper(req);
+  const auth = await requireStaff(req);
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   try {
@@ -28,14 +32,15 @@ export async function GET(req) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      // Most likely an undefined column (42703). Retry with the minimum set so
-      // the panel still works, and tell the admin what's wrong.
-      const retry = await supabaseAdmin.from("mp_profiles")
-        .select(SAFE_SELECT)
-        .order("created_at", { ascending: false });
-      if (retry.error) throw retry.error;
+      // is_admin probably missing (subadmin.sql not run) — retry without it,
+      // then fall back to the minimum so the panel always works.
+      let retry = await supabaseAdmin.from("mp_profiles").select(RICH_SELECT).order("created_at", { ascending: false });
+      if (retry.error) {
+        retry = await supabaseAdmin.from("mp_profiles").select(SAFE_SELECT).order("created_at", { ascending: false });
+        if (retry.error) throw retry.error;
+        warning = `Some profile columns are missing (${error.message}). Run supabase/fix-pack.sql — showing limited data.`;
+      }
       profiles = retry.data;
-      warning = `Some profile columns are missing (${error.message}). Run supabase/fix-pack.sql — showing limited data.`;
     }
 
     profiles = profiles || [];
@@ -71,9 +76,46 @@ export async function GET(req) {
   }
 }
 
+// Grant / revoke free Pro access for a creator (manual comp — no payment).
+// Pro = plan "pro" with a far-future expiry; revoke = back to "free".
+export async function PATCH(req) {
+  const auth = await requireStaff(req);
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  try {
+    const { userId, pro, subadmin } = await req.json();
+    if (!userId) return NextResponse.json({ error: "Missing userId." }, { status: 400 });
+
+    // Promoting / demoting a sub-admin is a SUPER-admin-only action (a sub-admin
+    // has full access but can't create other admins). A promoted sub-admin also
+    // gets free Pro.
+    if (subadmin !== undefined) {
+      if (!(await isSuperAdmin(auth.user))) return NextResponse.json({ error: "Only a super admin can manage admins." }, { status: 403 });
+      const update = subadmin
+        ? { is_admin: true, plan: "pro", plan_expires_at: new Date(Date.now() + 100 * 365 * 86400000).toISOString() }
+        : { is_admin: false };
+      const { data, error } = await supabaseAdmin.from("mp_profiles")
+        .update(update).eq("user_id", userId).select("user_id, is_admin");
+      if (error) throw error;
+      if (!data?.length) return NextResponse.json({ error: "Creator not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, isAdmin: !!data[0].is_admin });
+    }
+
+    const update = pro
+      ? { plan: "pro", plan_expires_at: new Date(Date.now() + 100 * 365 * 86400000).toISOString() }
+      : { plan: "free", plan_expires_at: null };
+    const { data, error } = await supabaseAdmin.from("mp_profiles")
+      .update(update).eq("user_id", userId).select("user_id, plan, plan_expires_at");
+    if (error) throw error;
+    if (!data?.length) return NextResponse.json({ error: "Creator not found." }, { status: 404 });
+    return NextResponse.json({ ok: true, plan: data[0].plan, isPro: !!pro });
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
 // Block / unblock a creator.
 export async function POST(req) {
-  const auth = await requireSuper(req);
+  const auth = await requireStaff(req);
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
     const { userId, blocked } = await req.json();

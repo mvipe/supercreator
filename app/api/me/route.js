@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest, isAdmin, isSuperAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isAdmin, isSuperAdmin, isStaff } from "@/lib/supabaseAdmin";
 import { reconcilePro, isProProfile } from "@/lib/subscription";
 
 // Plan state must never be served from a cache — a stale "free" here is what
@@ -52,12 +52,14 @@ export async function GET(req) {
   } catch { /* never block /api/me on reconciliation */ }
 
   const superAdmin = await isSuperAdmin(user).catch(() => false);
-  const admin = prof?.plan === "admin" || prof?.plan === "superadmin" || isAdmin(user) || superAdmin;
+  const staff = superAdmin || await isStaff(user).catch(() => false);
+  const admin = prof?.plan === "admin" || prof?.plan === "superadmin" || isAdmin(user) || staff;
 
   return noStore({
     signedIn: true,
     admin,
     superAdmin,
+    staff,
     isPro: isProProfile(prof),
     plan: prof?.plan || "free",
     planExpiresAt: prof?.plan_expires_at || null,

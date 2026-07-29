@@ -1,4 +1,4 @@
-import { supabaseAdmin, getUserFromRequest, isSuperAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET(req) {
       .eq("user_id", user.id)
       .single();
 
-    const superAdmin = profile?.plan === "superadmin" || await isSuperAdmin(user);
+    const superAdmin = profile?.plan === "superadmin" || await isStaff(user);
     if (!superAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -62,7 +62,7 @@ export async function POST(req) {
       .eq("user_id", user.id)
       .single();
 
-    const superAdmin = profile?.plan === "superadmin" || await isSuperAdmin(user);
+    const superAdmin = profile?.plan === "superadmin" || await isStaff(user);
     if (!superAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

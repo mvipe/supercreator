@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, getUserFromRequest, isSuperAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
 
 async function requireSuper(req) {
   const user = await getUserFromRequest(req);
   if (!user) return { error: "Please sign in first.", status: 401 };
-  if (!(await isSuperAdmin(user))) return { error: "Super admins only.", status: 403 };
+  if (!(await isStaff(user))) return { error: "Admins only.", status: 403 };
   return { user };
 }
 

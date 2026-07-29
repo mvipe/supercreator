@@ -22,11 +22,12 @@ export default function AdminPanel() {
   const [section, setSection] = useState("payouts"); // payouts | tutorials | creators | notifications
   const [state, setState] = useState("loading");     // loading | ok | denied
   const [superAdmin, setSuperAdmin] = useState(false);
+  const [staff, setStaff] = useState(false); // super admins + sub-admins
 
   useEffect(() => { if (!loading && !user) r.replace("/login"); }, [loading, user, r]);
   useEffect(() => {
     if (!user) return;
-    apiFetch("/api/me", undefined, "GET").then((me) => setSuperAdmin(!!me.superAdmin)).catch(() => {});
+    apiFetch("/api/me", undefined, "GET").then((me) => { setSuperAdmin(!!me.superAdmin); setStaff(!!me.staff); }).catch(() => {});
   }, [user]);
 
   if (loading || state === "loading" && section === "payouts") {
@@ -36,30 +37,35 @@ export default function AdminPanel() {
 
   return (
     <main className="min-h-screen bg-paper">
-      <header className="flex items-center gap-3 bg-[#101114] px-8 py-5 text-white">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-sm font-bold">A</span>
-        <div>
-          <div className="font-display text-lg font-bold">SuperCreators Admin</div>
-          <div className="text-xs text-white/50">Manage payouts, tutorials & notifications</div>
+      <header className="flex flex-wrap items-center gap-3 bg-[#101114] px-4 py-4 text-white sm:px-8 sm:py-5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-sm font-bold">A</span>
+        <div className="min-w-0">
+          <div className="font-display text-base font-bold leading-tight sm:text-lg">SuperCreators Admin</div>
+          <div className="hidden text-xs text-white/50 sm:block">Manage payouts, tutorials & notifications</div>
         </div>
-        <nav className="ml-8 flex gap-1">
-          {[["payouts", "Payouts"], ["tutorials", "Tutorials"], ...(superAdmin ? [["creators", "Creators"], ["kyc", "KYC"], ["notifications", "Notifications"]] : [])].map(([id, label]) => (
+        <a href="/dashboard" className="order-2 ml-auto shrink-0 text-sm font-semibold text-white/70 hover:text-white sm:order-last">
+          Exit <span className="hidden sm:inline">to dashboard</span> →
+        </a>
+        {/* Tabs: their own full-width, horizontally-scrollable row on mobile;
+            inline next to the title on desktop. */}
+        <nav className="order-3 -mx-4 flex w-full gap-1 overflow-x-auto px-4 pb-0.5 sm:order-none sm:mx-0 sm:ml-6 sm:w-auto sm:overflow-visible sm:px-0">
+          {[["payouts", "Payouts"], ["tutorials", "Tutorials"], ...(staff ? [["creators", "Creators"], ["leaderboard", "Leaderboard"], ["kyc", "KYC"], ["notifications", "Notifications"]] : [])].map(([id, label]) => (
             <button key={id} onClick={() => setSection(id)}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${section === id ? "bg-white/10 text-white" : "text-white/55 hover:text-white"}`}>
+              className={`shrink-0 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 ${section === id ? "bg-white/10 text-white" : "text-white/55 hover:text-white"}`}>
               {label}
             </button>
           ))}
+          {staff && (
+            <a href="/admin/settings" className="shrink-0 whitespace-nowrap rounded-lg border border-white/15 px-3.5 py-2 text-sm font-semibold text-white/70 transition-colors hover:border-white/30 hover:text-white sm:ml-2 sm:px-4">
+              Settings
+            </a>
+          )}
         </nav>
-        {superAdmin && (
-          <a href="/admin/settings" className="ml-4 rounded-lg px-4 py-2 text-sm font-semibold text-white/70 border border-white/15 hover:text-white hover:border-white/30 transition-colors">
-            Settings
-          </a>
-        )}
-        <a href="/dashboard" className="ml-auto text-sm font-semibold text-white/70 hover:text-white">Exit to dashboard →</a>
       </header>
 
       {section === "payouts" ? <PayoutsPanel setDenied={() => setState("denied")} denied={state === "denied"} />
-        : section === "creators" ? <CreatorsPanel />
+        : section === "creators" ? <CreatorsPanel canManageAdmins={superAdmin} />
+        : section === "leaderboard" ? <LeaderboardPanel />
         : section === "kyc" ? <KycReviewPanel />
         : section === "notifications" ? <NotificationsPanel />
         : <TutorialsPanel setDenied={() => setState("denied")} denied={state === "denied"} />}
@@ -272,7 +278,7 @@ function TutorialsPanel({ setDenied, denied }) {
 }
 
 /* ---------------- CREATORS (super admin) ---------------- */
-function CreatorsPanel() {
+function CreatorsPanel({ canManageAdmins = false }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [ready, setReady] = useState(false);
@@ -315,6 +321,26 @@ function CreatorsPanel() {
     if (!confirm(`${c.blocked ? "Unblock" : "Block"} ${c.display_name || c.full_name || c.username || "this creator"}?`)) return;
     setBusyId(c.user_id);
     try { await apiFetch("/api/admin/creators", { userId: c.user_id, blocked: !c.blocked }, "POST"); await load(); }
+    catch (e) { alert(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  // Manually grant / revoke free Pro access (comp — no payment taken).
+  async function togglePro(c) {
+    const grant = !c.isPro;
+    if (!confirm(`${grant ? "Give free Pro access to" : "Revoke Pro from"} ${c.display_name || c.full_name || c.username || "this creator"}?`)) return;
+    setBusyId(c.user_id);
+    try { await apiFetch("/api/admin/creators", { userId: c.user_id, pro: grant }, "PATCH"); await load(); }
+    catch (e) { alert(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  // Promote / demote a sub-admin (super admin only). Grants full admin access.
+  async function toggleSubadmin(c) {
+    const make = !c.is_admin;
+    if (!confirm(`${make ? "Make sub-admin (full admin access + free Pro)" : "Remove sub-admin access from"} ${c.display_name || c.full_name || c.username || "this creator"}?`)) return;
+    setBusyId(c.user_id);
+    try { await apiFetch("/api/admin/creators", { userId: c.user_id, subadmin: make }, "PATCH"); await load(); }
     catch (e) { alert(e.message); }
     finally { setBusyId(null); }
   }
@@ -367,6 +393,7 @@ function CreatorsPanel() {
               <button onClick={() => openDetail(c)} className="flex items-center gap-2 truncate text-left font-semibold text-brand hover:underline" title="View stats">
                 {c.full_name || c.display_name || "—"}
                 {c.is_super_admin && <span className="pill bg-brand-soft text-brand">super</span>}
+                {c.is_admin && !c.is_super_admin && <span className="pill bg-brand-soft text-brand">sub-admin</span>}
                 {c.isPro && <span className="pill bg-teal-soft text-teal">pro</span>}
               </button>
               <div className="truncate text-xs text-inkmuted">
@@ -383,8 +410,20 @@ function CreatorsPanel() {
             <div className="col-span-2 text-right">
               {c.is_super_admin
                 ? <span className="text-xs text-inkmuted">—</span>
-                : <button onClick={() => toggleBlock(c)} disabled={busyId === c.user_id}
-                    className={c.blocked ? "btn-ghost" : "btn-ghost text-danger"}>{busyId === c.user_id ? "…" : c.blocked ? "Unblock" : "Block"}</button>}
+                : <div className="flex flex-wrap items-center justify-end gap-2">
+                    {canManageAdmins && (
+                      <button onClick={() => toggleSubadmin(c)} disabled={busyId === c.user_id}
+                        className={`btn-ghost text-xs ${c.is_admin ? "text-brand" : "text-inkmuted"}`} title="Grant or revoke full admin (sub-admin) access">
+                        {busyId === c.user_id ? "…" : c.is_admin ? "Remove sub-admin" : "Make sub-admin"}
+                      </button>
+                    )}
+                    <button onClick={() => togglePro(c)} disabled={busyId === c.user_id}
+                      className={`btn-ghost text-xs ${c.isPro ? "text-teal" : "text-brand"}`} title="Give or revoke free Pro access">
+                      {busyId === c.user_id ? "…" : c.isPro ? "Revoke Pro" : "Give Pro"}
+                    </button>
+                    <button onClick={() => toggleBlock(c)} disabled={busyId === c.user_id}
+                      className={c.blocked ? "btn-ghost" : "btn-ghost text-danger"}>{c.blocked ? "Unblock" : "Block"}</button>
+                  </div>}
             </div>
           </div>
         ))}
@@ -475,6 +514,98 @@ function Stat({ label, value }) {
       <div className="text-[11px] font-semibold uppercase tracking-wide text-inkmuted">{label}</div>
       <div className="mt-1 font-display text-xl font-bold">{value}</div>
     </div>
+  );
+}
+
+/* ---------------- EARNINGS LEADERBOARD (super admin) ---------------- */
+const isoDay = (d) => new Date(d).toISOString().slice(0, 10);
+const TOP_OPTIONS = [["10", "Top 10"], ["15", "Top 15"], ["100", "Top 100"], ["custom", "Custom"]];
+const RANGE_OPTIONS = [
+  ["today", "Today"], ["yesterday", "Yesterday"], ["7d", "Last 7 days"],
+  ["month", "Last month"], ["year", "Last year"], ["custom", "Custom"]
+];
+
+function LeaderboardPanel() {
+  const [range, setRange] = useState("today");
+  const [topSel, setTopSel] = useState("10");
+  const [customTop, setCustomTop] = useState(25);
+  const [from, setFrom] = useState(isoDay(Date.now() - 6 * 86400000));
+  const [to, setTo] = useState(isoDay(Date.now()));
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const limit = topSel === "custom" ? Math.max(1, Number(customTop) || 10) : Number(topSel);
+
+  useEffect(() => {
+    let q = `/api/admin/leaderboard?range=${range}&limit=${limit}&t=${Date.now()}`;
+    if (range === "custom") { if (!from || !to) return; q += `&from=${from}&to=${to}`; }
+    setLoading(true); setErr("");
+    apiFetch(q, undefined, "GET")
+      .then((d) => { setRows(d.rows || []); setTotal(d.totalEarnings || 0); })
+      .catch((e) => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [range, limit, from, to]);
+
+  const medal = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`);
+
+  return (
+    <section className="px-4 py-6 sm:px-8 sm:py-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-bold">Earnings leaderboard</h2>
+          <p className="mt-0.5 text-sm text-inkmuted">Top-earning creators for the selected period.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select className="input h-10 py-0" value={topSel} onChange={(e) => setTopSel(e.target.value)}>
+            {TOP_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          {topSel === "custom" && (
+            <input className="input h-10 w-24 py-0" type="number" min="1" value={customTop}
+              onChange={(e) => setCustomTop(e.target.value)} placeholder="N" />
+          )}
+          <select className="input h-10 py-0" value={range} onChange={(e) => setRange(e.target.value)}>
+            {RANGE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          {range === "custom" && (
+            <div className="flex items-center gap-1.5 text-xs text-inkmuted">
+              <input type="date" className="input h-10 py-0" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+              <span>→</span>
+              <input type="date" className="input h-10 py-0" value={to} min={from || undefined} max={isoDay(Date.now())} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {err && <div className="mt-4 rounded-[8px] border border-danger/30 bg-red-50 p-4 text-sm text-danger"><b>Couldn't load leaderboard.</b> {err}</div>}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-md">
+        <Stat label="Creators" value={rows.length} />
+        <Stat label="Total earnings" value={inr(total)} />
+      </div>
+
+      <div className={`card mt-6 overflow-x-auto transition-opacity ${loading ? "opacity-50" : ""}`}>
+        <div className="grid min-w-[540px] grid-cols-12 gap-4 border-b border-line px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-inkmuted">
+          <div className="col-span-2">Rank</div><div className="col-span-6">Creator</div>
+          <div className="col-span-2 text-right">Sales</div><div className="col-span-2 text-right">Earnings</div>
+        </div>
+        {rows.length === 0 && !loading && (
+          <div className="px-5 py-16 text-center text-sm text-inkmuted">No earnings in this period.</div>
+        )}
+        {rows.map((r, i) => (
+          <div key={r.userId} className="grid min-w-[540px] grid-cols-12 items-center gap-4 border-b border-line px-5 py-3 text-sm last:border-0">
+            <div className="col-span-2 font-display text-base font-bold">{medal(i)}</div>
+            <div className="col-span-6 min-w-0">
+              <div className="truncate font-semibold">{r.name}</div>
+              {r.username && <div className="truncate text-xs text-inkmuted">@{r.username}</div>}
+            </div>
+            <div className="col-span-2 text-right tabular-nums">{r.sales}</div>
+            <div className="col-span-2 text-right font-semibold tabular-nums">{inr(r.earnings)}</div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
