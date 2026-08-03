@@ -55,17 +55,15 @@ export default function NotificationCenter() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="relative rounded-lg p-2 hover:bg-white/10 text-white"
+        className="relative rounded-lg p-2.5 hover:bg-white/10 text-white"
         aria-label="Notifications"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8.5a6 6 0 0 0-12 0c0 6.5-2.5 8-2.5 8h17s-2.5-1.5-2.5-8" />
+          <path d="M13.7 20.5a2 2 0 0 1-3.4 0" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-xs font-bold text-white">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
+          <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#8960ff] ring-2 ring-white" />
         )}
       </button>
 

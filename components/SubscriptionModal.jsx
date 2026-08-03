@@ -154,9 +154,15 @@ export default function SubscriptionModal({ onClose, onSuccess, onFree }) {
               <div className="text-xs text-inkmuted">No monthly fee. Platform takes a share from each sale.</div>
               <div className="text-xs text-inkmuted">Great if you want to publish immediately and start earning today.</div>
             </div>
-            <button onClick={publishFree} disabled={busy} className="btn btn-outline mt-6 w-full py-3">
-              Publish as Free
-            </button>
+            {onFree ? (
+              <button onClick={publishFree} disabled={busy} className="btn btn-outline mt-6 w-full py-3">
+                Publish as Free
+              </button>
+            ) : (
+              <div className="mt-6 w-full rounded-full border border-line py-3 text-center text-sm font-semibold text-inkmuted">
+                You're already on this plan
+              </div>
+            )}
           </div>
 
           <div className="rounded-3xl border border-line p-5 shadow-sm">

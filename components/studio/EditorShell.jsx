@@ -78,6 +78,14 @@ export default function EditorShell({ type, backHref, Form, View }) {
     if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
   }
 
+  async function publishFree() {
+    setShowSub(false);
+    setPublishing(true);
+    const ok = await persist("published");
+    setPublishing(false);
+    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+  }
+
   async function unpublish() {
     setPublishing(true);
     await persist("unpublished");
@@ -138,7 +146,8 @@ export default function EditorShell({ type, backHref, Form, View }) {
       </div>
       {showSub && (
         <SubscriptionModal onClose={() => setShowSub(false)}
-          onSuccess={() => { setShowSub(false); publish(); }} />
+          onSuccess={() => { setShowSub(false); publish(); }}
+          onFree={publishFree} />
       )}
     </div>
   );
