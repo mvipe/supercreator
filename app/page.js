@@ -347,7 +347,7 @@ function HowItWorks() {
 /* ---------------------------------------------------------------- */
 function PricingCalculator() {
   const [price, setPrice] = useState(1999);
-  const fee = useMemo(() => Math.round(price * 0.05 + 2), [price]);
+  const fee = useMemo(() => Math.round(price * 0.1), [price]);
   const payout = price - fee;
   const pct = Math.round(((price - 199) / (19999 - 199)) * 100);
 
@@ -411,7 +411,7 @@ function PricingCalculator() {
 
       <div className="mt-3 flex justify-between text-[11px]" style={{ color: T.inkmuted }}>
         <span>₹199</span>
-        <span>Platform + payment fee: ₹{fee.toLocaleString("en-IN")}</span>
+        <span>Platform fee (10%): ₹{fee.toLocaleString("en-IN")}</span>
         <span>₹19,999</span>
       </div>
     </Reveal>

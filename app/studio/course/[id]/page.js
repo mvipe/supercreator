@@ -98,6 +98,14 @@ export default function CourseEditor() {
     setPublishing(false);
   }
 
+  async function publishFree() {
+    setShowSub(false);
+    setPublishing(true);
+    const ok = await persist("published");
+    setPublishing(false);
+    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+  }
+
   return (
     <div className="flex min-h-screen">
       <div className="flex min-h-screen w-full flex-col border-r border-line bg-white lg:w-[420px] lg:shrink-0 xl:w-[480px]">
@@ -159,7 +167,7 @@ export default function CourseEditor() {
       {showSub && (
         <SubscriptionModal onClose={() => setShowSub(false)}
           onSuccess={() => { setShowSub(false); publish(); }}
-          onFree={() => { setShowSub(false); persist("published"); }} />
+          onFree={publishFree} />
       )}
     </div>
   );

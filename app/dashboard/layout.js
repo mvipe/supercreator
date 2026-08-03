@@ -75,10 +75,24 @@ export default function DashLayout({ children }) {
 
   if (loading || !user) return <div className="flex min-h-screen items-center justify-center text-inkmuted">Loading…</div>;
 
-  const displayName = (userProfile?.full_name || userProfile?.display_name || "Profile").toUpperCase();
+  const displayName = userProfile?.full_name || userProfile?.display_name || "Profile";
+  const initials = displayName.trim().slice(0, 2).toUpperCase() || "SC";
 
-  const NavLink = ({ n, onClick }) => {
+  const NavLink = ({ n, onClick, theme = "dark" }) => {
     const active = path === n.href || (n.href !== "/dashboard" && path.startsWith(n.href));
+    if (theme === "light") {
+      return (
+        <Link href={n.href}
+          onClick={onClick}
+          className={`flex items-center gap-3 rounded-[13px] px-3.5 py-2.5 text-sm font-medium transition-colors ${
+            active
+              ? "bg-[linear-gradient(120deg,#252166,#353181)] text-white font-semibold shadow-[0_9px_15px_#302d7626]"
+              : "text-[#697595] hover:bg-[#f5f5fb] hover:text-[#252166]"
+          }`}>
+          <I d={n.icon} /> <span className="flex-1">{n.label}</span>
+        </Link>
+      );
+    }
     return (
       <Link href={n.href}
         onClick={onClick}
@@ -126,64 +140,67 @@ export default function DashLayout({ children }) {
         </nav>
       </aside>
 
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-[#101114] text-white md:flex">
-        <Link href="/dashboard" className="flex items-center gap-2 px-5 py-6">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-white"><I d={ICONS.bolt} size={16} /></span>
-          <span className="font-display text-lg"><b className="font-bold">Super</b>Creators</span>
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-[#edf0f7] bg-white md:flex">
+        <Link href="/dashboard" className="flex items-center gap-2.5 px-6 py-6">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[linear-gradient(135deg,#7359f4,#4b32c9)] text-white shadow-[0_6px_14px_#7359f440]"><I d={ICONS.bolt} size={17} /></span>
+          <span className="font-display text-lg text-[#11162c]"><b className="font-bold">Super</b>Creators</span>
         </Link>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
-          {MAIN.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} />)}
-          {!isTeamMember && <NavLink n={{ href: "/dashboard/team", label: "Sub-Admins", icon: ICONS.audience }} />}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3.5 pb-4">
+          {MAIN.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} theme="light" />)}
+          {!isTeamMember && <NavLink n={{ href: "/dashboard/team", label: "Sub-Admins", icon: ICONS.audience }} theme="light" />}
           {isAdmin && (
             <Link href="/admin"
-              className={`flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition-colors ${path.startsWith("/admin") ? "bg-brand text-white" : "hover:bg-white/5"}`}
-              style={path.startsWith("/admin") ? undefined : { color: "#6C9BFF" }}>
+              className={`flex items-center gap-3 rounded-[13px] px-3.5 py-2.5 text-sm font-semibold transition-colors ${path.startsWith("/admin") ? "bg-[linear-gradient(120deg,#252166,#353181)] text-white" : "text-[#2E6EF7] hover:bg-[#f5f5fb]"}`}>
               <I d={ICONS.payments} /> Admin
             </Link>
           )}
-          <div className="px-3 pb-1 pt-5 text-[11px] font-bold uppercase tracking-wider text-white/35">Your apps</div>
-          {APPS.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} />)}
+          <div className="px-3.5 pb-1.5 pt-5 text-[11px] font-semibold uppercase tracking-wider text-[#7760d7]">Apps &amp; Tools</div>
+          {APPS.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} theme="light" />)}
           <Link href="/dashboard/apps"
-            className="mt-2 flex items-center justify-center gap-2 rounded-[10px] border border-white/15 px-3 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/5">
+            className="mt-4 flex items-center justify-center gap-2.5 rounded-[15px] bg-[linear-gradient(110deg,#356dfb,#8e49ee_59%,#fa5ca4)] px-3.5 py-3.5 text-sm font-semibold text-white shadow-[0_9px_20px_#8453ec40] transition-transform hover:scale-[1.01]">
             <I d={ICONS.apps} size={15} /> Explore All Apps
           </Link>
         </nav>
 
         {!isPro && (
-          <div className="mx-3 mb-3 rounded-[12px] bg-gradient-to-br from-[#1E54C8] to-[#7C3AED] p-4">
-            <div className="text-sm font-bold">You're on the Free plan</div>
+          <div className="mx-3.5 mb-3 rounded-[12px] bg-[linear-gradient(135deg,#6a42dc,#332281)] p-4">
+            <div className="text-sm font-bold text-white">You're on the Free plan</div>
             <p className="mt-0.5 text-xs text-white/75">Unlock all features and get paid.</p>
             <button onClick={() => setShowSub(true)}
-              className="mt-3 w-full rounded-[8px] bg-white px-3 py-2 text-sm font-bold text-ink shadow hover:bg-white/90">
+              className="mt-3 w-full rounded-[8px] bg-white px-3 py-2 text-sm font-bold text-[#332281] shadow hover:bg-white/90">
               Upgrade to Pro 🚀
             </button>
           </div>
         )}
 
-        <div className="border-t border-white/10 p-4">
+        <div className="border-t border-[#edf0f7] p-4">
           <div className="relative">
             <button onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-              className="flex w-full items-center justify-between gap-2.5 rounded-lg p-2 hover:bg-white/5">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-white">{displayName}</div>
+              className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-[#f5f5fb]">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#bd8dff,#6544e8)] text-sm font-semibold text-white">
+                {initials}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-[#11162c]">{displayName}</div>
+                <div className="text-xs text-[#8992ad]">{isPro ? "Pro Plan" : "Free Plan"}</div>
               </div>
-              <span className={`text-white/50 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`}>⌄</span>
+              <span className={`text-[#8992ad] transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`}>⌄</span>
             </button>
             {profileMenuOpen && (
               <div onClick={(e) => e.stopPropagation()}
-                className="absolute bottom-12 left-0 right-0 z-20 w-full overflow-hidden rounded-lg border border-white/10 bg-[#1a1a1d] shadow-lg">
+                className="absolute bottom-14 left-0 right-0 z-20 w-full overflow-hidden rounded-xl border border-[#edf0f7] bg-white shadow-lg">
                 <Link href="/dashboard/settings/profile"
-                  className="block px-4 py-2 text-sm text-white/80 hover:bg-white/10"
+                  className="block px-4 py-2.5 text-sm text-[#3c4257] hover:bg-[#f5f5fb]"
                   onClick={() => setProfileMenuOpen(false)}>
                   Profile
                 </Link>
                 <Link href="/dashboard/settings/billing"
-                  className="block px-4 py-2 text-sm text-white/80 hover:bg-white/10"
+                  className="block px-4 py-2.5 text-sm text-[#3c4257] hover:bg-[#f5f5fb]"
                   onClick={() => setProfileMenuOpen(false)}>
                   Billing
                 </Link>
                 <Link href="/dashboard/settings/notifications"
-                  className="block px-4 py-2 text-sm text-white/80 hover:bg-white/10"
+                  className="block px-4 py-2.5 text-sm text-[#3c4257] hover:bg-[#f5f5fb]"
                   onClick={() => setProfileMenuOpen(false)}>
                   Notifications
                 </Link>
@@ -191,7 +208,7 @@ export default function DashLayout({ children }) {
                   await supabase.auth.signOut();
                   r.replace("/login");
                   setProfileMenuOpen(false);
-                }} className="block w-full px-4 py-2 text-left text-sm text-brand hover:bg-white/10">
+                }} className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-brand hover:bg-[#f5f5fb]">
                   Sign out
                 </button>
               </div>
@@ -199,7 +216,7 @@ export default function DashLayout({ children }) {
           </div>
         </div>
       </aside>
-      <div className="h-screen min-w-0 flex-1 overflow-y-auto bg-paper">
+      <div className="h-screen min-w-0 flex-1 overflow-y-auto" style={{ backgroundColor: "#fbfcff", backgroundImage: "radial-gradient(circle at 82% 0%, #eff0ff 0%, transparent 32%)" }}>
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-line bg-white px-4 py-3 md:hidden">
           <button
             aria-label="Open sidebar"
