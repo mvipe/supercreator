@@ -45,7 +45,7 @@ export function MadeWithBadge({ href = BRAND.url }) {
     <div className="pointer-events-none fixed bottom-4 left-4 z-40">
       <Link
         href={href}
-        className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/95 py-1.5 pl-3 pr-3.5 text-[13px] shadow-lg backdrop-blur-sm transition-transform hover:scale-[1.03]"
+        className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/95 py-1.5 pl-3 pr-3.5 font-display text-[13px] shadow-lg backdrop-blur-sm transition-transform hover:scale-[1.03]"
       >
         <span className="text-inkmuted">Made with</span>
         <BrandMark />
