@@ -120,6 +120,16 @@ export default function StorePage() {
             <span className="min-w-0 truncate text-inkmuted">🌐 supercreators.in{storeUrl || "/…"}</span>
             {storeUrl && <button onClick={copyLink} className="shrink-0 text-brand">{copied ? "✓" : "⧉"}</button>}
           </div>
+          {p.username && (
+            <a href={`/w/${p.username}`} target="_blank"
+              className="group relative shrink-0 overflow-hidden rounded-full border border-white/10 px-4 py-1.5 text-sm font-bold text-white shadow-lg transition-transform hover:-translate-y-0.5"
+              style={{ background: "radial-gradient(120% 160% at 0% 0%, #6366F1 0%, transparent 55%), radial-gradient(120% 160% at 100% 100%, #a855f7 0%, transparent 55%), #0b0b16" }}>
+              <span className="relative flex items-center gap-1.5">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18" /></svg>
+                Web App
+              </span>
+            </a>
+          )}
           {storeUrl && <a href={storeUrl} target="_blank" className="btn-ink shrink-0">Share ↗</a>}
         </div>
       </div>

@@ -92,6 +92,14 @@ export default function StorePublic() {
     <main className="relative min-h-screen" style={{ ...bgStyle, fontFamily: `'${font}', sans-serif` }}>
       {!profile.bg_image && <div className="pointer-events-none fixed inset-0 z-0" style={SHEEN} />}
       <VisitTracker ownerId={profile.user_id} path={`/${username}`} source="store" />
+
+      {/* View the full marketing "Web App" version of this creator's page */}
+      <a href={`/w/${username}`}
+        className="fixed right-3 top-3 z-30 inline-flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold text-white shadow-lg ring-1 ring-white/10 transition-transform hover:-translate-y-0.5 sm:right-5 sm:top-5 sm:text-sm"
+        style={{ background: "#111827", fontFamily: "'Lexend', sans-serif" }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18" /></svg>
+        View Web App
+      </a>
       <div className="relative z-10 mx-auto max-w-xl px-4 pb-12 pt-16 text-center lg:grid lg:max-w-5xl lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start lg:gap-10 lg:pb-14 lg:pt-24">
         {/* LEFT — profile card, sticky on desktop; stacked & centered on mobile */}
         <div className="text-center lg:sticky lg:top-24 lg:self-start lg:pt-2">
