@@ -11,7 +11,7 @@ const APPS = [
   { name: "Books", desc: "Sell e-books, guides and digital downloads.", href: "/dashboard/books", emoji: "📁", tint: "#FFF1E0", live: true },
   { name: "Locked Content", desc: "Pay-to-unlock messages, files and videos.", href: "/dashboard/locked", emoji: "🔒", tint: "#FDE7EC", live: true },
   { name: "Payment Pages", desc: "Collect one-time payments for anything.", href: "/dashboard/pages", emoji: "💳", tint: "#E7F1FF", live: true },
-  { name: "AutoDM", desc: "Instagram comment-to-DM automation.", emoji: "💬", tint: "#F3E8FF", live: false },
+  { name: "AutoDM", desc: "Instagram comment-to-DM automation.", href: "/dashboard/autodm", emoji: "💬", tint: "#F3E8FF", live: true },
   { name: "Telegram", desc: "Paid Telegram channel access.", emoji: "✈️", tint: "#E0F2FE", live: false },
   { name: "Discord", desc: "Paid Discord community access.", emoji: "🎮", tint: "#EEF2FF", live: false }
 ];

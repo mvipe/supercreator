@@ -27,7 +27,8 @@ const APPS = [
   { href: "/dashboard/events", label: "Events", icon: ICONS.event },
   { href: "/dashboard/pages", label: "Payment Pages", icon: ICONS.page },
   { href: "/dashboard/books", label: "Books", icon: ICONS.learn },
-  { href: "/dashboard/locked", label: "Locked Content", icon: ICONS.locked }
+  { href: "/dashboard/locked", label: "Locked Content", icon: ICONS.locked },
+  { href: "/dashboard/autodm", label: "AutoDM", icon: ICONS.chat }
 ];
 
 export default function DashLayout({ children }) {
