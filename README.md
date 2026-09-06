@@ -6,6 +6,7 @@ Built with **Next.js 14 (App Router, JSX)**, **Supabase** (Postgres + Auth + Sto
 
 ---
 
+
 ## What's inside
 
 **Creator dashboard** (`/dashboard`)
