@@ -606,6 +606,73 @@ function TestimonialMarquee() {
 }
 
 /* ---------------------------------------------------------------- */
+/* About + FAQ (SEO copy: "Super Creators" / "SuperCreators")         */
+/* ---------------------------------------------------------------- */
+const FAQS = [
+  [
+    "What is SuperCreators?",
+    "SuperCreators (also written Super Creators) is a platform for Indian creators to sell online courses, e-books, events, 1:1 sessions and locked content from one personal store — with UPI and card payments through Razorpay.",
+  ],
+  [
+    "Who can use the SuperCreators app?",
+    "Any creator, coach, teacher or freelancer who wants to sell their knowledge online — no website or coding needed. Sign up, build your store and share your link.",
+  ],
+  [
+    "What can I sell on SuperCreators?",
+    "Online courses with modules and lessons, e-books and digital downloads, paid events and webinars, 1:1 session bookings, locked content and simple payment pages.",
+  ],
+  [
+    "How do I get paid?",
+    "Buyers pay by UPI or card through Razorpay checkout. You set the price, add coupons if you like, and see your payout in the calculator above before you launch.",
+  ],
+  [
+    "Is SuperCreators the same as Super Creators or supercreators.in?",
+    "Yes. SuperCreators, Super Creators and supercreators.in all refer to the same platform — supercreators.in is our official website.",
+  ],
+];
+
+function AboutAndFaq() {
+  return (
+    <section className="px-6 py-24" style={{ background: T.paper2 }}>
+      <div className="mx-auto max-w-3xl">
+        <Reveal className="text-center">
+          <h2
+            className="text-3xl font-bold md:text-4xl"
+            style={{ fontFamily: "var(--font-display)", color: T.ink }}
+          >
+            About SuperCreators
+          </h2>
+          <p className="mt-4 text-base" style={{ color: T.inkmuted }}>
+            SuperCreators (also written Super Creators) is an India-first platform that helps
+            creators turn what they know into income. Launch your own store at
+            supercreators.in/your-name, sell online courses and digital products, and accept UPI
+            and card payments — all in one place.
+          </p>
+        </Reveal>
+
+        <div className="mt-12 space-y-4">
+          {FAQS.map(([q, a], i) => (
+            <Reveal key={q} delay={i * 0.06}>
+              <div className="rounded-2xl border bg-white p-6" style={{ borderColor: T.line }}>
+                <h3
+                  className="text-lg font-bold"
+                  style={{ fontFamily: "var(--font-display)", color: T.ink }}
+                >
+                  {q}
+                </h3>
+                <p className="mt-2 text-sm" style={{ color: T.inkmuted }}>
+                  {a}
+                </p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Page                                                               */
 /* ---------------------------------------------------------------- */
 export default function Home() {
@@ -630,9 +697,14 @@ export default function Home() {
         style={{ borderColor: T.line, background: "rgba(255,255,255,0.75)" }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <div className="text-xl font-bold" style={{ fontFamily: "var(--font-headline)", color: T.ink }}>
+          <Link
+            href="/"
+            aria-label="SuperCreators home"
+            className="text-xl font-bold"
+            style={{ fontFamily: "var(--font-headline)", color: T.ink }}
+          >
             Super<span style={{ color: T.brand }}>Creators</span>
-          </div>
+          </Link>
           <Link
             href={user ? "/dashboard" : "/login"}
             className="rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.03]"
@@ -673,8 +745,9 @@ export default function Home() {
               className="mt-5 max-w-xl text-lg"
               style={{ color: T.inkmuted }}
             >
-              Build a beautiful course page, add modules and lessons, set your price and start
-              selling — with checkout, coupons, certificates and analytics built in.
+              SuperCreators lets you build a beautiful course page, add modules and lessons,
+              set your price and start selling — with checkout, coupons, certificates and
+              analytics built in.
             </motion.p>
 
             <motion.div
@@ -712,12 +785,12 @@ export default function Home() {
       {/* How it works */}
       <section id="how" className="px-6 py-24">
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-          <div
+          <h2
             className="text-3xl font-bold md:text-4xl"
             style={{ fontFamily: "var(--font-display)", color: T.ink }}
           >
             From idea to income, in three steps
-          </div>
+          </h2>
         </Reveal>
         <HowItWorks />
       </section>
@@ -726,12 +799,12 @@ export default function Home() {
       <section className="px-6 py-8" style={{ background: T.paper2 }}>
         <div className="py-16">
           <Reveal className="mx-auto mb-10 max-w-2xl text-center">
-            <div
+            <h2
               className="text-3xl font-bold md:text-4xl"
               style={{ fontFamily: "var(--font-display)", color: T.ink }}
             >
               You set the price. You keep the profit.
-            </div>
+            </h2>
             <p className="mt-3 text-sm" style={{ color: T.inkmuted }}>
               Drag the slider — see your payout update instantly.
             </p>
@@ -743,12 +816,12 @@ export default function Home() {
       {/* Feature tabs */}
       <section className="px-6 py-24">
         <Reveal className="mx-auto mb-12 max-w-2xl text-center">
-          <div
+          <h2
             className="text-3xl font-bold md:text-4xl"
             style={{ fontFamily: "var(--font-display)", color: T.ink }}
           >
             Everything a course launch needs
-          </div>
+          </h2>
         </Reveal>
         <FeatureTabs />
       </section>
@@ -756,25 +829,28 @@ export default function Home() {
       {/* Testimonials */}
       <section className="py-20" style={{ background: T.paper2 }}>
         <Reveal className="mx-auto mb-10 max-w-2xl text-center px-6">
-          <div
+          <h2
             className="text-3xl font-bold md:text-4xl"
             style={{ fontFamily: "var(--font-display)", color: T.ink }}
           >
             Creators are already selling
-          </div>
+          </h2>
         </Reveal>
         <TestimonialMarquee />
       </section>
 
+      {/* About + FAQ — real on-page text so Google can match "Super Creators" searches */}
+      <AboutAndFaq />
+
       {/* Final CTA */}
       <section className="px-6 py-24" style={{ background: T.ink }}>
         <Reveal className="mx-auto max-w-2xl text-center">
-          <div
+          <h2
             className="text-3xl font-bold text-white md:text-5xl"
             style={{ fontFamily: "var(--font-display)" }}
           >
             Your course page is ten minutes away.
-          </div>
+          </h2>
           <Link
             href={user ? "/dashboard" : "/login"}
             className="mt-8 inline-block rounded-full px-8 py-3.5 text-base font-semibold transition-transform hover:scale-[1.03]"
