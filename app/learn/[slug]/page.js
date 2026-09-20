@@ -190,7 +190,8 @@ function LessonView({ course, current, accent, watermark, progress, onToggleDone
   return (
     <div className="mx-auto max-w-3xl">
       <h2 className="font-display text-2xl font-bold">{current.type === "quiz" ? current.quizTitle || current.title : current.title}</h2>
-      <LessonContent lesson={current} accent={accent} courseId={course.id} watermark={watermark} />
+      <LessonContent lesson={current} accent={accent} courseId={course.id} watermark={watermark}
+        cover={course.coverImages?.[0] || course.cover_images?.[0]} />
       <div className="mt-6 flex items-center gap-3">
         <button onClick={() => onToggleDone(current.id, !progress[current.id])}
           className="btn text-white" style={{ background: progress[current.id] ? "#0E9F6E" : accent }}>
@@ -215,7 +216,7 @@ function LessonView({ course, current, accent, watermark, progress, onToggleDone
   );
 }
 
-function LessonContent({ lesson, accent, courseId, watermark }) {
+function LessonContent({ lesson, accent, courseId, watermark, cover }) {
   const type = lesson.type || "video";
   const [showQuizModal, setShowQuizModal] = useState(false);
 
@@ -277,8 +278,10 @@ function LessonContent({ lesson, accent, courseId, watermark }) {
       </>
     );
   }
-  // video (default) — signed URL + watermark, no download affordances
-  return <SecureVideo lesson={lesson} courseId={courseId} accent={accent} watermark={watermark} />;
+  // video (default) — signed URL + watermark, no download affordances.
+  // `cover` is the course artwork, used as the poster frame when the lesson
+  // has no thumbnail of its own.
+  return <SecureVideo lesson={lesson} courseId={courseId} accent={accent} watermark={watermark} cover={cover} />;
 }
 
 /** Full live-class schedule, opened from the sidebar. */
