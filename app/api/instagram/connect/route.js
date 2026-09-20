@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
-import { authorizeUrl, signState, oauthConfigured, oauthProblem, redirectUri, fetchAccount, exchangeLongLived } from "@/lib/instagram";
+import { authorizeUrl, signState, oauthConfigured, oauthProblem, redirectUri, originFrom, fetchAccount, exchangeLongLived } from "@/lib/instagram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,13 +13,15 @@ export async function GET(req) {
     return NextResponse.json({ error: "Instagram sign-in isn't configured on this server yet. Paste an access token instead.", oauth: false }, { status: 400 });
   }
 
+  const origin = originFrom(req);
+
   // Catch the misconfigurations that would otherwise surface as Instagram's
   // opaque "Invalid platform app" / "Invalid redirect_uri" screens.
-  const problem = oauthProblem(new URL(req.url).origin);
+  const problem = oauthProblem(origin);
   if (problem) return NextResponse.json({ error: problem, oauth: true }, { status: 400 });
 
   const ownerId = await getActiveOwnerId(user);
-  return NextResponse.json({ url: authorizeUrl(redirectUri(new URL(req.url).origin), signState(ownerId)), oauth: true });
+  return NextResponse.json({ url: authorizeUrl(redirectUri(origin), signState(ownerId)), oauth: true });
 }
 
 /**

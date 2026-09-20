@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
+import { grossPaise, feePaise, netPaise } from "@/lib/earnings";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,22 @@ function pctChange(cur, prev) {
 }
 
 const nameFrom = (answers) => (answers || []).find((a) => /name/i.test(a.label))?.value || null;
+
+/**
+ * Bookings, asking for the commission columns when the DB has them.
+ * `revenue_and_covers.sql` adds creator_amount/commission_amount to
+ * mp_bookings; before it runs, the richer select errors and the whole stats
+ * call used to fail — so fall back to the legacy shape instead.
+ */
+async function bookingsQuery(ownerId) {
+  const base = "session_id, amount, answers, status, starts_at, ends_at, created_at";
+  const rich = await supabaseAdmin.from("mp_bookings")
+    .select(`${base}, creator_amount, commission_amount`)
+    .eq("owner_id", ownerId).order("created_at", { ascending: false });
+  if (!rich.error) return rich;
+  return supabaseAdmin.from("mp_bookings").select(base)
+    .eq("owner_id", ownerId).order("created_at", { ascending: false });
+}
 
 export async function GET(req) {
   try {
@@ -64,10 +81,9 @@ export async function GET(req) {
     ] = await Promise.all([
       visitsQuery,
       visitsPrevQuery,
-      supabaseAdmin.from("mp_purchases").select("product_type, product_id, amount, creator_amount, answers, created_at")
+      supabaseAdmin.from("mp_purchases").select("product_type, product_id, amount, creator_amount, commission_amount, answers, created_at")
         .eq("owner_id", ownerId).order("created_at", { ascending: false }),
-      supabaseAdmin.from("mp_bookings").select("session_id, amount, answers, status, starts_at, ends_at, created_at")
-        .eq("owner_id", ownerId).order("created_at", { ascending: false }),
+      bookingsQuery(ownerId),
       supabaseAdmin.from("mp_courses").select("id", { count: "exact", head: true }).eq("owner_id", ownerId),
       supabaseAdmin.from("mp_courses").select("id", { count: "exact", head: true }).eq("owner_id", ownerId).neq("status", "published"),
       supabaseAdmin.from("mp_products").select("id", { count: "exact", head: true }).eq("owner_id", ownerId),
@@ -93,18 +109,27 @@ export async function GET(req) {
     };
 
     // Unified sale events across one-off purchases and bookings.
+    //
+    // `amount` on a sale event is always the CREATOR'S NET (gross minus the
+    // platform commission). The home page's "Revenue" tile was previously a
+    // mix: purchases used creator_amount but bookings used the buyer's gross,
+    // so the headline number was higher than anything the creator could
+    // actually withdraw. lib/earnings.js is now the only thing that decides.
+    const toSale = (row, extra) => ({
+      created_at: row.created_at,
+      gross: grossPaise(row) / 100,
+      fee: feePaise(row) / 100,
+      amount: netPaise(row) / 100,
+      buyerName: nameFrom(row.answers),
+      ...extra
+    });
+
     const sales = [
-      ...buys.map((p) => ({
-        created_at: p.created_at,
-        amount: (p.creator_amount ?? p.amount ?? 0) / 100,
-        buyerName: nameFrom(p.answers),
+      ...buys.map((p) => toSale(p, {
         title: titleOf(p.product_type, p.product_id),
         href: HREF_BY_TYPE[p.product_type] || "/dashboard/payments"
       })),
-      ...books.map((b) => ({
-        created_at: b.created_at,
-        amount: (b.amount || 0) / 100,
-        buyerName: nameFrom(b.answers),
+      ...books.map((b) => toSale(b, {
         title: titleOf("booking", b.session_id),
         href: HREF_BY_TYPE.booking
       }))
@@ -113,8 +138,16 @@ export async function GET(req) {
     const inRange = (s, start, end) => { const t = new Date(s.created_at); return t >= start && t < end; };
     const salesNow = sales.filter((s) => inRange(s, from, now));
     const salesPrev = prevFrom ? sales.filter((s) => inRange(s, prevFrom, from)) : [];
-    const revenueNow = salesNow.reduce((a, s) => a + s.amount, 0);
-    const revenuePrev = salesPrev.reduce((a, s) => a + s.amount, 0);
+    const sum = (rows, key) => rows.reduce((a, s) => a + (s[key] || 0), 0);
+    const revenueNow = sum(salesNow, "amount");
+    const revenuePrev = sum(salesPrev, "amount");
+    const grossNow = sum(salesNow, "gross");
+    const feeNow = sum(salesNow, "fee");
+
+    // Lifetime net — "what you've earned in total", independent of the filter.
+    const lifetimeNet = sum(sales, "amount");
+    const lifetimeGross = sum(sales, "gross");
+    const lifetimeFee = sum(sales, "fee");
 
     const recentActivity = sales.slice(0, 5).map((s) => ({
       title: "New order received",
@@ -135,13 +168,22 @@ export async function GET(req) {
       range: { from: from.toISOString(), to: now.toISOString() },
       visits: { value: visitsNow || 0, change: prevFrom ? pctChange(visitsNow || 0, visitsPrev || 0) : null },
       sales: { value: salesNow.length, change: prevFrom ? pctChange(salesNow.length, salesPrev.length) : null },
-      revenue: { value: revenueNow, change: prevFrom ? pctChange(revenueNow, revenuePrev) : null },
+      // revenue.value = NET of the platform fee, i.e. what the creator keeps.
+      revenue: {
+        value: revenueNow,
+        gross: grossNow,
+        fee: feeNow,
+        change: prevFrom ? pctChange(revenueNow, revenuePrev) : null
+      },
+      // Lifetime totals — used for the "total you've earned" line.
+      lifetime: { net: lifetimeNet, gross: lifetimeGross, fee: lifetimeFee, sales: sales.length },
       totalProducts: (coursesTotal || 0) + (productsTotal || 0),
       unpublished: (coursesUnpublished || 0) + (productsUnpublished || 0),
       sessions: {
         total: books.length,
         hours: Math.round(totalHours),
-        earnings: books.reduce((a, b) => a + (b.amount || 0), 0) / 100
+        // Net again, so this tile agrees with Payments and Payouts.
+        earnings: books.reduce((a, b) => a + netPaise(b), 0) / 100
       },
       recentActivity
     }, { headers: { "Cache-Control": "no-store" } });

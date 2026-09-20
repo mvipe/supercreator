@@ -1,8 +1,46 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { ytEmbed } from "@/lib/courseModel";
+import { ytEmbed, videoThumb } from "@/lib/courseModel";
 import { heroSurface } from "@/lib/texture";
+
+/**
+ * One tutorial card.
+ *
+ * These used to be a flat purple gradient with a play glyph — every lesson
+ * looked identical, so the grid was unreadable at a glance. Now each card
+ * shows real cover art: the admin's uploaded `cover_image` if there is one,
+ * otherwise the video's own thumbnail (YouTube / Vimeo), and only then the
+ * gradient placeholder.
+ */
+function TutorialCard({ t, onOpen }) {
+  const [broken, setBroken] = useState(false);
+  const cover = !broken ? (t.cover_image || videoThumb(t.video_url)) : null;
+  return (
+    <button onClick={onOpen} className="card group overflow-hidden text-left transition-transform hover:-translate-y-0.5">
+      <div className="relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-brand to-brand-dark text-white">
+        {cover && (
+          <img
+            src={cover} alt=""
+            onError={() => setBroken(true)}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        )}
+        {cover && <span className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />}
+        <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/25 backdrop-blur transition-transform group-hover:scale-110">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+        </span>
+        {t.duration && (
+          <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">{t.duration}</span>
+        )}
+      </div>
+      <div className="p-5">
+        <h3 className="font-display text-base font-bold leading-snug">{t.title}</h3>
+        {t.description && <p className="mt-1 line-clamp-2 text-sm text-inkmuted">{t.description}</p>}
+      </div>
+    </button>
+  );
+}
 
 export default function Learn() {
   const [tutorials, setTutorials] = useState([]);
@@ -41,17 +79,7 @@ export default function Learn() {
             <h2 className="font-display text-2xl font-bold">{category}</h2>
             <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {items.map((t) => (
-                <button key={t.id} onClick={() => setActive(t)} className="card overflow-hidden text-left transition-transform hover:-translate-y-0.5">
-                  <div className="relative flex h-40 items-center justify-center bg-gradient-to-br from-brand to-brand-dark text-white">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                    </span>
-                  </div>
-                  <div className="p-5">
-                    <h3 className="font-display text-base font-bold leading-snug">{t.title}</h3>
-                    {t.description && <p className="mt-1 line-clamp-2 text-sm text-inkmuted">{t.description}</p>}
-                  </div>
-                </button>
+                <TutorialCard key={t.id} t={t} onOpen={() => setActive(t)} />
               ))}
             </div>
           </div>

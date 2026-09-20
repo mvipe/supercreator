@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
+import { netPaise } from "@/lib/earnings";
 
 export const dynamic = "force-dynamic";
 
@@ -39,19 +40,34 @@ export async function GET(req) {
     const { from, to } = windowFor(range, url.searchParams.get("from"), url.searchParams.get("to"));
     const iso = from.toISOString(), isoTo = to.toISOString();
 
+    // Bookings: ask for the commission split, degrade if that migration
+    // hasn't run yet (netPaise then falls back to the gross).
+    const bookingQuery = async () => {
+      const base = "owner_id, amount, status, created_at";
+      const rich = await supabaseAdmin.from("mp_bookings")
+        .select(`${base}, creator_amount, commission_amount`)
+        .gte("created_at", iso).lte("created_at", isoTo);
+      if (!rich.error) return rich;
+      return supabaseAdmin.from("mp_bookings").select(base).gte("created_at", iso).lte("created_at", isoTo);
+    };
+
     const [{ data: purchases }, { data: bookings }] = await Promise.all([
-      supabaseAdmin.from("mp_purchases").select("owner_id, amount, creator_amount, created_at").gte("created_at", iso).lte("created_at", isoTo),
-      supabaseAdmin.from("mp_bookings").select("owner_id, amount, status, created_at").gte("created_at", iso).lte("created_at", isoTo)
+      supabaseAdmin.from("mp_purchases")
+        .select("owner_id, amount, creator_amount, commission_amount, created_at")
+        .gte("created_at", iso).lte("created_at", isoTo),
+      bookingQuery()
     ]);
 
+    // "Earnings" on this board means what the creator KEEPS — one definition
+    // shared with the home page, Payments and the creator detail modal.
     const earn = {}, sales = {};
     for (const p of purchases || []) {
-      earn[p.owner_id] = (earn[p.owner_id] || 0) + ((p.creator_amount != null ? p.creator_amount : p.amount) || 0);
+      earn[p.owner_id] = (earn[p.owner_id] || 0) + netPaise(p);
       sales[p.owner_id] = (sales[p.owner_id] || 0) + 1;
     }
     for (const b of bookings || []) {
       if (b.status === "cancelled") continue;
-      earn[b.owner_id] = (earn[b.owner_id] || 0) + (b.amount || 0);
+      earn[b.owner_id] = (earn[b.owner_id] || 0) + netPaise(b);
       sales[b.owner_id] = (sales[b.owner_id] || 0) + 1;
     }
 
@@ -75,7 +91,7 @@ export async function GET(req) {
     }).sort((a, b) => b.earnings - a.earnings).slice(0, limit);
 
     const totalEarnings = rows.reduce((n, r) => n + r.earnings, 0);
-    return NextResponse.json({ range, from: iso, to: isoTo, count: rows.length, totalEarnings, rows },
+    return NextResponse.json({ range, from: iso, to: isoTo, count: rows.length, totalEarnings, rows, generatedAt: new Date().toISOString() },
       { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

@@ -42,13 +42,29 @@ export async function POST(req) {
     };
     if (!row.video_url) return NextResponse.json({ error: "Add a video link." }, { status: 400 });
 
-    if (body.id) {
-      const { data, error } = await supabaseAdmin.from("mp_tutorials").update(row).eq("id", body.id).select("*").single();
-      if (error) throw error;
-      return NextResponse.json({ tutorial: data });
+    // Cover art for the Learn grid. Kept separate from `row` so that a DB
+    // without revenue_and_covers.sql applied still accepts the write —
+    // otherwise adding the field would break saving tutorials outright.
+    const cover = (body.cover_image || "").trim();
+    const withCover = { ...row, cover_image: cover };
+
+    const table = () => supabaseAdmin.from("mp_tutorials");
+    const write = async (payload) =>
+      body.id
+        ? table().update(payload).eq("id", body.id).select("*").single()
+        : table().insert(payload).select("*").single();
+
+    let { data, error } = await write(withCover);
+    if (error) {
+      // Most likely: cover_image column missing. Retry without it and tell
+      // the admin which migration to run rather than failing the save.
+      const retry = await write(row);
+      if (retry.error) throw retry.error;
+      return NextResponse.json({
+        tutorial: retry.data,
+        warning: "Saved, but the cover image wasn't stored — run supabase/revenue_and_covers.sql."
+      });
     }
-    const { data, error } = await supabaseAdmin.from("mp_tutorials").insert(row).select("*").single();
-    if (error) throw error;
     return NextResponse.json({ tutorial: data });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });

@@ -1,10 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { readState, exchangeCode, exchangeLongLived, fetchAccount, redirectUri } from "@/lib/instagram";
+import { readState, exchangeCode, exchangeLongLived, fetchAccount, redirectUri, originFrom, publicOrigin } from "@/lib/instagram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const appUrl = (req) => (process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin).replace(/\/$/, "");
+const appUrl = (req) => publicOrigin(originFrom(req));
 const back = (req, params) => {
   const u = new URL(`${appUrl(req)}/dashboard/autodm`);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
@@ -27,7 +27,7 @@ export async function GET(req) {
 
   try {
     // Must be byte-identical to the one used on the way out.
-    const short = await exchangeCode(code.replace(/#_$/, ""), redirectUri(new URL(req.url).origin));
+    const short = await exchangeCode(code.replace(/#_$/, ""), redirectUri(originFrom(req)));
     const long = await exchangeLongLived(short.access_token);
     const info = await fetchAccount(long.access_token, "instagram");
 

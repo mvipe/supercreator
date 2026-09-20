@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { netRupees, grossRupees, earningsBreakdown } from "@/lib/earnings";
 import { inr } from "@/lib/courseModel";
 import { Field, Switch } from "@/components/ui";
 import { useAuth } from "@/components/AuthProvider";
@@ -49,8 +50,9 @@ export default function Bookings() {
 
   const stats = useMemo(() => {
     const upcoming = bookings.filter((b) => new Date(b.starts_at) > new Date() && b.status === "confirmed");
-    const earned = bookings.reduce((a, b) => a + (b.amount || 0), 0) / 100;
-    return { total: bookings.length, earned, upcoming: upcoming.length };
+    // Net of the platform fee — the same number Payments and Payouts show.
+    const t = earningsBreakdown(bookings);
+    return { total: bookings.length, earned: t.net, gross: t.gross, fee: t.fee, upcoming: upcoming.length };
   }, [bookings]);
 
   const bookingUrl = profile?.username ? `/book/${profile.username}` : null;
@@ -144,7 +146,7 @@ export default function Bookings() {
                     <div className="col-span-3 whitespace-nowrap">{new Date(b.starts_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
                     <div className="col-span-3 truncate font-semibold">{s?.title || "Session"}</div>
                     <div className="col-span-2 truncate">+{b.buyer_phone || "—"}</div>
-                    <div className="col-span-1 whitespace-nowrap text-right font-semibold">{inr((b.amount || 0) / 100)}</div>
+                    <div className="col-span-1 whitespace-nowrap text-right font-semibold" title={`Buyer paid ${inr(grossRupees(b))}`}>{inr(netRupees(b))}</div>
                     <div className="col-span-3 flex items-center gap-2">
                       <span className={`pill shrink-0 ${b.status === "confirmed" ? "bg-brand-soft text-brand" : b.status === "completed" ? "bg-teal-soft text-teal" : "bg-paper text-inkmuted"}`}>{b.status}</span>
                       {b.status === "confirmed" && (

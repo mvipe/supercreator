@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/supabase";
-import { inr, ytEmbed } from "@/lib/courseModel";
+import { apiFetch, supabase } from "@/lib/supabase";
+import { inr, ytEmbed, videoThumb, uploadImage } from "@/lib/courseModel";
 import { useAuth } from "@/components/AuthProvider";
 import NotificationsPanel from "@/components/admin/NotificationsPanel";
 
@@ -183,6 +183,7 @@ function TutorialsPanel({ setDenied, denied }) {
   const [ready, setReady] = useState(false);
   const [editing, setEditing] = useState(null); // draft object or null
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState("");
 
   async function load() {
@@ -193,15 +194,27 @@ function TutorialsPanel({ setDenied, denied }) {
   }
   useEffect(() => { if (user) load(); }, [user]);
 
-  const blank = { title: "", description: "", video_url: "", category: "Essentials", position: rows.length, published: true };
+  const blank = { title: "", description: "", video_url: "", cover_image: "", category: "Essentials", position: rows.length, published: true };
 
   async function save() {
     setBusy(true); setErr("");
     try {
-      await apiFetch("/api/admin/tutorials", editing, "POST");
+      const res = await apiFetch("/api/admin/tutorials", editing, "POST");
+      if (res?.warning) alert(res.warning);
       setEditing(null); await load();
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
+  }
+
+  /** Upload a cover image for the Learn grid to Supabase storage. */
+  async function onCover(files) {
+    if (!files?.[0]) return;
+    setUploading(true); setErr("");
+    try {
+      const url = await uploadImage(user.id, files[0]);
+      setEditing((e) => ({ ...e, cover_image: url }));
+    } catch (e) { setErr(e.message); }
+    finally { setUploading(false); }
   }
   async function remove(id) {
     if (!confirm("Delete this tutorial?")) return;
@@ -234,7 +247,12 @@ function TutorialsPanel({ setDenied, denied }) {
         {rows.length === 0 && <div className="px-5 py-14 text-center text-sm text-inkmuted">No tutorials yet. Add your first one.</div>}
         {rows.map((t) => (
           <div key={t.id} className="grid grid-cols-12 items-center gap-4 border-b border-line px-5 py-3.5 text-sm last:border-0">
-            <div className="col-span-5 min-w-0"><div className="truncate font-semibold">{t.title}</div><div className="truncate text-xs text-inkmuted">{t.video_url}</div></div>
+            <div className="col-span-5 flex min-w-0 items-center gap-3">
+              <div className="h-10 w-16 shrink-0 overflow-hidden rounded-md border border-line bg-paper">
+                {(t.cover_image || videoThumb(t.video_url)) && <img src={t.cover_image || videoThumb(t.video_url)} alt="" className="h-full w-full object-cover" />}
+              </div>
+              <div className="min-w-0"><div className="truncate font-semibold">{t.title}</div><div className="truncate text-xs text-inkmuted">{t.video_url}</div></div>
+            </div>
             <div className="col-span-3">{t.category}</div>
             <div className="col-span-2"><span className={`pill ${t.published ? "bg-teal-soft text-teal" : "bg-paper text-inkmuted"}`}>{t.published ? "Published" : "Hidden"}</span></div>
             <div className="col-span-2 flex justify-end gap-2">
@@ -253,6 +271,31 @@ function TutorialsPanel({ setDenied, denied }) {
             <div className="mt-4 space-y-4">
               <div><label className="label">Title</label><input className="input" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></div>
               <div><label className="label">Video link (YouTube, Vimeo or direct URL)</label><input className="input" placeholder="https://youtu.be/…" value={editing.video_url} onChange={(e) => setEditing({ ...editing, video_url: e.target.value })} /></div>
+
+              {/* Cover art for the Learn grid. Blank falls back to the video's
+                  own thumbnail, so this is optional. */}
+              <div>
+                <label className="label">Cover image <span className="font-normal text-inkmuted">— optional, 16:9</span></label>
+                <div className="flex items-center gap-3">
+                  <div className="h-16 w-28 shrink-0 overflow-hidden rounded-lg border border-line bg-paper">
+                    {(editing.cover_image || videoThumb(editing.video_url)) && (
+                      <img src={editing.cover_image || videoThumb(editing.video_url)} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <label className="btn-ghost w-full cursor-pointer">
+                      {uploading ? "Uploading…" : editing.cover_image ? "Replace image" : "Upload image"}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => onCover(e.target.files)} />
+                    </label>
+                    <input className="input" placeholder="…or paste an image URL" value={editing.cover_image || ""}
+                      onChange={(e) => setEditing({ ...editing, cover_image: e.target.value })} />
+                  </div>
+                  {editing.cover_image && (
+                    <button onClick={() => setEditing({ ...editing, cover_image: "" })} className="shrink-0 text-xs font-semibold text-danger">Remove</button>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-inkmuted">Left blank, the video's own thumbnail is used.</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="label">Category</label>
                   <select className="input" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
@@ -290,6 +333,8 @@ function CreatorsPanel({ canManageAdmins = false }) {
   const [detail, setDetail] = useState(null);       // { creator, totals, courses, products }
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState("");
+  const [stores, setStores] = useState(null);       // { total, withProducts, list[] }
+  const [showStores, setShowStores] = useState(false);
 
   async function openDetail(c) {
     setDetail({ creator: { name: c.full_name || c.display_name || c.username || "Creator", username: c.username, email: c.email } });
@@ -306,6 +351,7 @@ function CreatorsPanel({ canManageAdmins = false }) {
     try {
       const res = await apiFetch("/api/admin/creators", undefined, "GET");
       setRows(res.creators || []);
+      setStores(res.stores || null);
       setWarning(res.warning || "");
       setReady(true);
     } catch (e) {
@@ -357,7 +403,7 @@ function CreatorsPanel({ canManageAdmins = false }) {
 
   return (
     <section className="px-8 py-8">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl font-bold">Creators <span className="text-inkmuted">({rows.length})</span></h2>
           <p className="mt-0.5 text-sm text-inkmuted">Block or unblock any creator. Blocked creators can't sell or withdraw.</p>
@@ -366,6 +412,19 @@ function CreatorsPanel({ canManageAdmins = false }) {
           <input className="input max-w-xs" placeholder="Search name, @user, email, phone…" value={q} onChange={(e) => setQ(e.target.value)} />
           <button onClick={load} className="btn-ghost shrink-0">Refresh</button>
         </div>
+      </div>
+
+      {/* Stores roll-up — how many creators actually have a live storefront,
+          with every store name clickable straight through to the public page. */}
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <Stat label="Creators" value={rows.length} />
+        <Stat label="Stores created" value={stores?.total ?? "—"} />
+        <Stat label="Stores with products" value={stores?.withProducts ?? "—"} />
+        <button onClick={() => setShowStores(true)} disabled={!stores?.total}
+          className="rounded-xl border border-line bg-white px-4 py-3 text-left transition-colors hover:border-brand disabled:opacity-50">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-inkmuted">All stores</div>
+          <div className="mt-1 font-display text-xl font-bold text-brand">View list →</div>
+        </button>
       </div>
 
       {err && (
@@ -378,8 +437,8 @@ function CreatorsPanel({ canManageAdmins = false }) {
       )}
 
       <div className="card mt-6 overflow-x-auto">
-        <div className="grid min-w-[860px] grid-cols-12 gap-4 border-b border-line px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-inkmuted">
-          <div className="col-span-4">Creator</div><div className="col-span-3">Contact</div>
+        <div className="grid min-w-[1040px] grid-cols-12 gap-4 border-b border-line px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-inkmuted">
+          <div className="col-span-3">Creator</div><div className="col-span-2">Store</div><div className="col-span-2">Contact</div>
           <div className="col-span-2 text-right">Revenue</div><div className="col-span-1 text-center">Status</div><div className="col-span-2 text-right">Action</div>
         </div>
         {list.length === 0 && (
@@ -388,8 +447,8 @@ function CreatorsPanel({ canManageAdmins = false }) {
           </div>
         )}
         {list.map((c) => (
-          <div key={c.user_id} className="grid min-w-[860px] grid-cols-12 items-center gap-4 border-b border-line px-5 py-3.5 text-sm last:border-0">
-            <div className="col-span-4 min-w-0">
+          <div key={c.user_id} className="grid min-w-[1040px] grid-cols-12 items-center gap-4 border-b border-line px-5 py-3.5 text-sm last:border-0">
+            <div className="col-span-3 min-w-0">
               <button onClick={() => openDetail(c)} className="flex items-center gap-2 truncate text-left font-semibold text-brand hover:underline" title="View stats">
                 {c.full_name || c.display_name || "—"}
                 {c.is_super_admin && <span className="pill bg-brand-soft text-brand">super</span>}
@@ -397,15 +456,36 @@ function CreatorsPanel({ canManageAdmins = false }) {
                 {c.isPro && <span className="pill bg-teal-soft text-teal">pro</span>}
               </button>
               <div className="truncate text-xs text-inkmuted">
-                {c.username ? `@${c.username}` : "no store"}{c.business_name ? ` · ${c.business_name}` : ""}
-                {c.created_at ? ` · joined ${new Date(c.created_at).toLocaleDateString("en-IN")}` : ""}
+                {c.created_at ? `joined ${new Date(c.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : "—"}
               </div>
             </div>
-            <div className="col-span-3 min-w-0 text-inkmuted">
+
+            {/* The store the creator built — name links straight to the live page. */}
+            <div className="col-span-2 min-w-0">
+              {c.store ? (
+                <>
+                  <a href={c.store.url} target="_blank" rel="noopener noreferrer"
+                    className="block truncate font-semibold text-brand hover:underline" title={`Open ${c.store.url}`}>
+                    {c.store.name} ↗
+                  </a>
+                  <div className="truncate text-xs text-inkmuted">
+                    @{c.store.username} · {c.store.liveProducts} live
+                    {c.store.draftProducts ? ` · ${c.store.draftProducts} draft` : ""}
+                  </div>
+                </>
+              ) : (
+                <span className="text-xs text-inkmuted">No store yet</span>
+              )}
+            </div>
+
+            <div className="col-span-2 min-w-0 text-inkmuted">
               <div className="truncate">{c.email || "—"}</div>
               {c.phone_number && <div className="truncate text-xs">+{String(c.phone_number).replace(/^\+/, "")}</div>}
             </div>
-            <div className="col-span-2 text-right font-semibold">{inr(c.revenue)}</div>
+            <div className="col-span-2 text-right">
+              <div className="font-semibold">{inr(c.revenue)}</div>
+              <div className="text-[11px] text-inkmuted">{c.sales || 0} sales · net of fee</div>
+            </div>
             <div className="col-span-1 text-center"><span className={`pill ${c.blocked ? "bg-red-50 text-danger" : "bg-teal-soft text-teal"}`}>{c.blocked ? "Blocked" : "Active"}</span></div>
             <div className="col-span-2 text-right">
               {c.is_super_admin
@@ -428,6 +508,32 @@ function CreatorsPanel({ canManageAdmins = false }) {
           </div>
         ))}
       </div>
+
+      {/* Every store, one click from the public page */}
+      {showStores && stores && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowStores(false)}>
+          <div className="max-h-[86vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold">Stores <span className="text-inkmuted">({stores.total})</span></h3>
+                <p className="mt-0.5 text-sm text-inkmuted">{stores.withProducts} have at least one live product.</p>
+              </div>
+              <button onClick={() => setShowStores(false)} className="rounded-lg p-1 text-inkmuted hover:bg-paper" aria-label="Close">✕</button>
+            </div>
+            <div className="mt-4 divide-y divide-line overflow-hidden rounded-xl border border-line">
+              {stores.list.map((s) => (
+                <div key={s.userId} className="flex items-center gap-3 px-4 py-3 text-sm">
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-semibold text-brand hover:underline">
+                    {s.name} <span className="font-normal text-inkmuted">/u/{s.username}</span> ↗
+                  </a>
+                  <span className="shrink-0 text-xs text-inkmuted">{s.liveProducts} live{s.draftProducts ? ` · ${s.draftProducts} draft` : ""}</span>
+                  <span className="w-24 shrink-0 text-right font-semibold">{inr(s.revenue)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Per-creator stats */}
       {detail && (
@@ -525,6 +631,16 @@ const RANGE_OPTIONS = [
   ["month", "Last month"], ["year", "Last year"], ["custom", "Custom"]
 ];
 
+// How often the board re-pulls on its own. The board used to be a one-shot
+// fetch: leave the tab open and the ranking silently went stale.
+const AUTO_OPTIONS = [
+  ["0", "Off"],
+  ["300", "Every 5 min"],
+  ["3600", "Every hour"],
+  ["43200", "Every 12 hours"],
+  ["86400", "Every 24 hours"]
+];
+
 function LeaderboardPanel() {
   const [range, setRange] = useState("today");
   const [topSel, setTopSel] = useState("10");
@@ -535,18 +651,52 @@ function LeaderboardPanel() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [auto, setAuto] = useState("43200");   // default: refresh every 12h
+  const [updatedAt, setUpdatedAt] = useState(null);
 
   const limit = topSel === "custom" ? Math.max(1, Number(customTop) || 10) : Number(topSel);
 
-  useEffect(() => {
+  /** Fetch the board. `quiet` leaves the current rows on screen meanwhile. */
+  const fetchBoard = useCallback(async (quiet = false) => {
     let q = `/api/admin/leaderboard?range=${range}&limit=${limit}&t=${Date.now()}`;
     if (range === "custom") { if (!from || !to) return; q += `&from=${from}&to=${to}`; }
-    setLoading(true); setErr("");
-    apiFetch(q, undefined, "GET")
-      .then((d) => { setRows(d.rows || []); setTotal(d.totalEarnings || 0); })
-      .catch((e) => setErr(e.message))
-      .finally(() => setLoading(false));
+    if (!quiet) setLoading(true);
+    setErr("");
+    try {
+      const d = await apiFetch(q, undefined, "GET");
+      setRows(d.rows || []);
+      setTotal(d.totalEarnings || 0);
+      setUpdatedAt(new Date().toISOString());
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [range, limit, from, to]);
+
+  useEffect(() => { fetchBoard(); }, [fetchBoard]);
+
+  // Auto-refresh on the chosen cadence, and immediately when the tab regains
+  // focus (so a board left open overnight is current the moment it's looked at).
+  useEffect(() => {
+    const seconds = Number(auto);
+    const onFocus = () => fetchBoard(true);
+    window.addEventListener("focus", onFocus);
+    if (!seconds) return () => window.removeEventListener("focus", onFocus);
+    const t = setInterval(() => fetchBoard(true), seconds * 1000);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
+  }, [auto, fetchBoard]);
+
+  // A sale anywhere on the platform moves the ranking — react to it live.
+  useEffect(() => {
+    if (auto === "0") return;
+    const channel = supabase
+      .channel("leaderboard-sales")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mp_purchases" }, () => fetchBoard(true))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mp_bookings" }, () => fetchBoard(true))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [auto, fetchBoard]);
 
   const medal = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`);
 
@@ -555,9 +705,23 @@ function LeaderboardPanel() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl font-bold">Earnings leaderboard</h2>
-          <p className="mt-0.5 text-sm text-inkmuted">Top-earning creators for the selected period.</p>
+          <p className="mt-0.5 text-sm text-inkmuted">
+            Top-earning creators for the selected period — net of the platform fee.
+          </p>
+          <p className="mt-1 flex items-center gap-2 text-xs text-inkmuted">
+            <span className={`inline-flex h-2 w-2 rounded-full ${auto === "0" ? "bg-inkmuted" : "bg-teal"}`} />
+            {updatedAt
+              ? `Updated ${new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
+              : "Loading…"}
+            {auto !== "0" && ` · auto-refresh ${(AUTO_OPTIONS.find(([v]) => v === auto)?.[1] || "").toLowerCase()}`}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* How often the board re-pulls by itself. */}
+          <select className="input h-10 py-0" value={auto} onChange={(e) => setAuto(e.target.value)} title="Auto-refresh">
+            {AUTO_OPTIONS.map(([v, l]) => <option key={v} value={v}>{`Auto: ${l}`}</option>)}
+          </select>
+          <button onClick={() => fetchBoard(true)} className="btn-ghost h-10 py-0 text-xs">Refresh now</button>
           <select className="input h-10 py-0" value={topSel} onChange={(e) => setTopSel(e.target.value)}>
             {TOP_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>

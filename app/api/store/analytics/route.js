@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
+import { sumNetPaise, sumGrossPaise, sumFeePaise } from "@/lib/earnings";
 import { rangeDays, bucketFor, countryName } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
@@ -94,7 +95,7 @@ export async function GET(req) {
       .select("visitor_id, source, country_code, country, city, device, target_type, target_id, label, created_at")
       .eq("owner_id", ownerId).order("created_at", { ascending: true }).limit(MAX_ROWS);
     let pq = supabaseAdmin.from("mp_purchases")
-      .select("amount, creator_amount, created_at").eq("owner_id", ownerId);
+      .select("amount, creator_amount, commission_amount, created_at").eq("owner_id", ownerId);
 
     if (bounded) {
       const fromIso = from.toISOString();
@@ -146,7 +147,11 @@ export async function GET(req) {
     const clicksByCity = Object.fromEntries(cityClicks.map((r) => [r.key, r.total]));
 
     const uniqueVisitors = new Set(visits.map((v) => v.visitor_id).filter(Boolean)).size;
-    const revenue = purchases.reduce((a, p) => a + ((p.creator_amount ?? p.amount) || 0), 0);
+    // Revenue here means the creator's NET, after the platform fee, so the
+    // store analytics agrees with the home page, Payments and Payouts.
+    const revenue = sumNetPaise(purchases);
+    const grossRevenue = sumGrossPaise(purchases);
+    const platformFee = sumFeePaise(purchases);
 
     return NextResponse.json({
       range,
@@ -160,6 +165,8 @@ export async function GET(req) {
         ctr: visits.length ? +((clicks.length / visits.length) * 100).toFixed(1) : 0,
         sales: purchases.length,
         revenue: revenue / 100,
+        grossRevenue: grossRevenue / 100,
+        platformFee: platformFee / 100,
         conversion: visits.length ? +((purchases.length / visits.length) * 100).toFixed(2) : 0
       },
       series,

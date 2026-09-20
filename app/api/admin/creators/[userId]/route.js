@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, isStaff } from "@/lib/supabaseAdmin";
+import { netPaise } from "@/lib/earnings";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(req, { params }) {
       supabaseAdmin.from("mp_profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabaseAdmin.from("mp_courses").select("id, title, status, pricing, modules, created_at").eq("owner_id", userId),
       supabaseAdmin.from("mp_products").select("id, type, title, status, created_at").eq("owner_id", userId),
-      supabaseAdmin.from("mp_purchases").select("product_type, product_id, amount, creator_amount").eq("owner_id", userId),
+      supabaseAdmin.from("mp_purchases").select("product_type, product_id, amount, creator_amount, commission_amount").eq("owner_id", userId),
       supabaseAdmin.from("mp_bookings").select("amount, status").eq("owner_id", userId)
     ]);
 
@@ -28,7 +29,7 @@ export async function GET(req, { params }) {
       const key = `${p.product_type}:${p.product_id}`;
       const e = byProduct[key] || { sales: 0, revenue: 0 };
       e.sales += 1;
-      e.revenue += (p.creator_amount != null ? p.creator_amount : p.amount) || 0;
+      e.revenue += netPaise(p);
       byProduct[key] = e;
     }
 
@@ -46,7 +47,7 @@ export async function GET(req, { params }) {
 
     let bookingSales = 0, bookingRevenue = 0;
     for (const b of bookings || []) {
-      if (b.status !== "cancelled") { bookingSales += 1; bookingRevenue += (b.amount || 0); }
+      if (b.status !== "cancelled") { bookingSales += 1; bookingRevenue += netPaise(b); }
     }
 
     const productRevenue = [...courseRows, ...productRows].reduce((n, r) => n + r.revenue, 0);

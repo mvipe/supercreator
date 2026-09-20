@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, apiFetch } from "@/lib/supabase";
 import { inr, uploadImage } from "@/lib/courseModel";
 import { TYPE_META } from "@/lib/products";
@@ -7,6 +7,7 @@ import { Field } from "@/components/ui";
 import { useAuth } from "@/components/AuthProvider";
 import { heroSurface, SHEEN } from "@/lib/texture";
 import { downloadInvoice, invoiceNumber } from "@/lib/invoice";
+import { netRupees, grossRupees, feeRupees, earningsBreakdown } from "@/lib/earnings";
 
 const TABS = ["Transactions", "Account"];
 const FILTERS = ["all", "course", "event", "locked", "payment", "booking", "book"];
@@ -42,18 +43,62 @@ function Transactions() {
   const { user, ownerId } = useAuth();
   const [rows, setRows] = useState([]);
   const [seller, setSeller] = useState({});
+  const [totals, setTotals] = useState(null);
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [live, setLive] = useState(true);
+  const [flash, setFlash] = useState(false);   // pulses the cards on a new sale
+  const countRef = useRef(0);
 
+  /** Pull the ledger. `quiet` keeps the table visible while refreshing. */
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    try {
+      const res = await apiFetch("/api/payments", undefined, "GET");
+      const next = res.rows || [];
+      // New money since the last poll? Flash the cards so it's noticeable.
+      if (countRef.current && next.length > countRef.current) {
+        setFlash(true);
+        setTimeout(() => setFlash(false), 1600);
+      }
+      countRef.current = next.length;
+      setRows(next);
+      setSeller(res.seller || {});
+      setTotals(res.totals || null);
+      setUpdatedAt(res.generatedAt || new Date().toISOString());
+    } catch {
+      if (!quiet) setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (user) load(); }, [user, load]);
+
+  // Live mode: refresh every 20s, plus immediately on a Supabase insert and
+  // whenever the tab regains focus (a sale that lands while you're on the
+  // phone shows up without a manual reload).
   useEffect(() => {
-    if (!user) return;
-    apiFetch("/api/payments", undefined, "GET")
-      .then((res) => { setRows(res.rows || []); setSeller(res.seller || {}); })
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, [user]);
+    if (!user || !ownerId || !live) return;
+    const timer = setInterval(() => load(true), 20000);
+    const onFocus = () => load(true);
+    window.addEventListener("focus", onFocus);
+
+    const channel = supabase
+      .channel(`payments-${ownerId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mp_purchases", filter: `owner_id=eq.${ownerId}` }, () => load(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "mp_bookings", filter: `owner_id=eq.${ownerId}` }, () => load(true))
+      .subscribe();
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      supabase.removeChannel(channel);
+    };
+  }, [user, ownerId, live, load]);
 
   /** Build + download a PDF invoice for one transaction. */
   function getInvoice(r) {
@@ -76,17 +121,21 @@ function Transactions() {
       return !s || (r.buyer_name || "").toLowerCase().includes(s) || (r.buyer_phone || "").includes(s) || (r.product_name || "").toLowerCase().includes(s);
     });
 
-  const totals = useMemo(() => ({
-    gross: rows.reduce((a, r) => a + (r.status === "paid" ? r.amount || 0 : 0), 0) / 100,
-    count: rows.length
-  }), [rows]);
+  // Server totals are authoritative; recompute locally as a fallback so the
+  // cards still work if an older API response comes back without them.
+  const money = useMemo(
+    () => totals || earningsBreakdown(rows.filter((r) => r.status === "paid")),
+    [totals, rows]
+  );
 
   function exportCsv() {
-    const head = ["Invoice no", "Date", "Customer", "Phone", "Product", "Type", "Coupon", "Amount (₹)", "Status"];
+    const head = ["Invoice no", "Date", "Customer", "Phone", "Product", "Type", "Coupon", "Gross (₹)", "Platform fee (₹)", "You earned (₹)", "Status"];
     const lines = list.map((r) => [
       invoiceNumber(r), new Date(r.created_at).toLocaleString("en-IN"), r.buyer_name || "", r.buyer_phone || "",
       r.product_name || "", TYPE_META[r.product_type]?.label || r.product_type,
-      r.coupon || "", ((r.amount || 0) / 100).toFixed(2), r.status
+      r.coupon || "",
+      grossRupees(r).toFixed(2), feeRupees(r).toFixed(2), netRupees(r).toFixed(2),
+      r.status
     ]);
     const csv = [head, ...lines].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -96,10 +145,38 @@ function Transactions() {
 
   return (
     <section className="px-4 py-6 sm:px-8 sm:py-8">
-      <div className="grid max-w-lg gap-4 sm:grid-cols-2">
-        <div className="card p-5"><div className="text-xs font-semibold uppercase tracking-wide text-inkmuted">Total earned</div><div className="mt-1 font-display text-3xl font-bold">{inr(totals.gross)}</div></div>
-        <div className="card p-5"><div className="text-xs font-semibold uppercase tracking-wide text-inkmuted">Transactions</div><div className="mt-1 font-display text-3xl font-bold">{totals.count}</div></div>
+      {/* ---- live revenue header ---- */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="font-display text-xl font-bold">Revenue</h2>
+        <button
+          onClick={() => setLive((v) => !v)}
+          title={live ? "Live updates are on — click to pause" : "Live updates paused — click to resume"}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            live ? "border-teal/30 bg-teal-soft text-teal" : "border-line bg-white text-inkmuted"}`}>
+          <span className={`relative flex h-2 w-2 ${live ? "" : "opacity-40"}`}>
+            {live && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal opacity-70" />}
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${live ? "bg-teal" : "bg-inkmuted"}`} />
+          </span>
+          {live ? "Live" : "Paused"}
+        </button>
+        <span className="text-xs text-inkmuted">
+          {updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "—"}
+        </span>
+        <button onClick={() => load(true)} className="btn-ghost ml-auto py-1.5 text-xs">Refresh now</button>
       </div>
+
+      {/* Four cards that add up: gross − platform fee = what you earned. */}
+      <div className={`mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4 ${flash ? "animate-pulse" : ""}`}>
+        <MoneyCard
+          tone="teal" label="You earned" value={inr(money.net)}
+          sub="After the platform fee — this is what you can withdraw" big />
+        <MoneyCard label="Gross sales" value={inr(money.gross)} sub="What buyers paid in total" />
+        <MoneyCard tone="muted" label="Platform fee" value={`− ${inr(money.fee)}`}
+          sub={money.gross > 0 ? `${((money.fee / money.gross) * 100).toFixed(1)}% of gross` : "No sales yet"} />
+        <MoneyCard label="Transactions" value={String(money.count ?? 0)}
+          sub={money.refunded ? `${money.refunded} refunded / cancelled` : "All settled"} />
+      </div>
+
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (
@@ -116,7 +193,7 @@ function Transactions() {
         <div className="grid min-w-[940px] grid-cols-12 gap-4 border-b border-line px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-inkmuted">
           <div className="col-span-2">Date</div><div className="col-span-2">Customer</div>
           <div className="col-span-3">Product</div><div className="col-span-1">Type</div>
-          <div className="col-span-2 text-right">Amount</div><div className="col-span-1 text-right">Status</div>
+          <div className="col-span-2 text-right">You earned</div><div className="col-span-1 text-right">Status</div>
           <div className="col-span-1 text-right">Invoice</div>
         </div>
         {loading && <div className="px-5 py-16 text-center text-sm text-inkmuted">Loading…</div>}
@@ -136,7 +213,14 @@ function Transactions() {
               {r.coupon && <div className="truncate text-xs text-inkmuted">Coupon: {r.coupon}</div>}
             </div>
             <div className="col-span-1"><span className="pill bg-brand-soft text-brand">{TYPE_META[r.product_type]?.label || r.product_type}</span></div>
-            <div className="col-span-2 text-right font-semibold">{inr((r.amount || 0) / 100)}</div>
+            {/* Net first (that's the creator's money), with the gross and the
+                fee underneath so the arithmetic is never a mystery. */}
+            <div className="col-span-2 text-right">
+              <div className="font-semibold">{inr(netRupees(r))}</div>
+              <div className="text-[11px] text-inkmuted">
+                {inr(grossRupees(r))} − {inr(feeRupees(r))} fee
+              </div>
+            </div>
             <div className="col-span-1 text-right"><span className={`pill ${STATUS_STYLE[r.status] || "bg-paper text-inkmuted"}`}>{r.status}</span></div>
             <div className="col-span-1 text-right">
               <button
@@ -156,6 +240,19 @@ function Transactions() {
         ))}
       </div>
     </section>
+  );
+}
+
+/** One headline figure. `big` gives the "You earned" card extra weight. */
+function MoneyCard({ label, value, sub, tone, big }) {
+  const ring = tone === "teal" ? "border-teal/25 bg-teal-soft" : tone === "muted" ? "border-line bg-paper" : "border-line bg-white";
+  const fg = tone === "teal" ? "text-teal" : tone === "muted" ? "text-inkmuted" : "text-ink";
+  return (
+    <div className={`rounded-2xl border p-5 shadow-sm ${ring}`}>
+      <div className="text-xs font-semibold uppercase tracking-wide text-inkmuted">{label}</div>
+      <div className={`mt-1 font-display font-bold ${big ? "text-4xl" : "text-3xl"} ${fg}`}>{value}</div>
+      {sub && <div className="mt-1 text-[11px] leading-snug text-inkmuted">{sub}</div>}
+    </div>
   );
 }
 
@@ -329,10 +426,35 @@ function KycPanel() {
         <Field label="Bank account number" required><input className="input" disabled={locked} value={k.bank_account || ""} onChange={(e) => set({ bank_account: e.target.value })} /></Field>
         <Field label="IFSC" required><input className="input uppercase" disabled={locked} value={k.ifsc || ""} onChange={(e) => set({ ifsc: e.target.value })} /></Field>
       </div>
+      {/* The old version gave no sign an upload had worked — just a bare
+          "View uploaded" link. It now shows the file itself and says plainly
+          that it's attached but not submitted until you press the button. */}
       <Field label="ID / PAN document" hint="Upload a clear photo or scan">
         <div className="flex items-center gap-3">
-          {k.doc_url && <a href={k.doc_url} target="_blank" className="text-sm font-semibold text-brand">View uploaded ↗</a>}
-          {!locked && <label className="btn-ghost cursor-pointer">{uploading ? "Uploading…" : k.doc_url ? "Replace" : "Upload document"}<input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => onDoc(e.target.files)} /></label>}
+          <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-paper text-2xl">
+            {k.doc_url
+              ? (/\.pdf($|\?)/i.test(k.doc_url)
+                  ? <span title="PDF document">📄</span>
+                  : <img src={k.doc_url} alt="" className="h-full w-full object-cover" />)
+              : <span className="text-xs text-inkmuted">None</span>}
+          </div>
+          <div className="min-w-0 flex-1">
+            {k.doc_url && (
+              <div className="mb-1.5 flex items-center gap-2 text-xs">
+                <span className="font-semibold text-teal">✓ Attached</span>
+                <a href={k.doc_url} target="_blank" className="font-semibold text-brand hover:underline">View ↗</a>
+              </div>
+            )}
+            {!locked && (
+              <label className="btn-ghost cursor-pointer">
+                {uploading ? "Uploading…" : k.doc_url ? "Replace document" : "Upload document"}
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => onDoc(e.target.files)} />
+              </label>
+            )}
+            {k.doc_url && !locked && (
+              <p className="mt-1 text-[11px] text-inkmuted">Saved with this form — press “Submit for verification” to send it.</p>
+            )}
+          </div>
         </div>
       </Field>
 

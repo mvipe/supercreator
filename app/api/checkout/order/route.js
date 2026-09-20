@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
+import { insertBooking } from "@/lib/bookings";
 import { supabaseAdmin, getUserFromRequest, isBlocked } from "@/lib/supabaseAdmin";
 import { productChargeRupees, findProductCoupon } from "@/lib/products";
 
@@ -64,11 +65,15 @@ async function grantAccess({ productType, productId, ownerId, user, amount, appl
       .eq("owner_id", ownerId).eq("status", "confirmed")
       .lt("starts_at", ends.toISOString()).gt("ends_at", starts.toISOString());
     if (clash?.length) throw new Error("That slot was just booked by someone else. Pick another time. Choose another slot.");
-    await supabaseAdmin.from("mp_bookings").insert({
+    // Bookings used to store only the gross `amount`, with no commission
+    // split — so every "revenue" number that included bookings was the
+    // buyer's gross, not the creator's payout. Record the same three columns
+    // purchases use. (insertBooking degrades if the migration hasn't run.)
+    await insertBooking({
       session_id: productId, owner_id: ownerId, buyer_id: user.id,
       starts_at: starts.toISOString(), ends_at: ends.toISOString(),
       amount, buyer_phone: buyerPhone, answers: answers || []
-    });
+    }, { commissionPercentage, commissionAmount, creatorAmount });
     return;
   }
   await supabaseAdmin.from("mp_purchases").upsert({

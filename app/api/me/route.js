@@ -19,6 +19,7 @@ const SIGNED_OUT = { signedIn: false, admin: false, superAdmin: false, isPro: fa
 // whole, and the old code ignored the error — `prof` came back null and every
 // user silently read as "free", which looked exactly like the plan reverting.
 const SELECTS = [
+  "plan, plan_expires_at, blocked, profile_complete, is_super_admin, is_admin, payout_method, kyc_status",
   "plan, plan_expires_at, blocked, profile_complete, is_super_admin, payout_method, kyc_status",
   "plan, plan_expires_at, blocked, profile_complete, is_super_admin",
   "plan, plan_expires_at",
@@ -68,6 +69,22 @@ export async function GET(req) {
   const ownerId = isTeamMember ? team.owner_id : user.id;
   const permissions = isTeamMember ? (team.active === false ? [] : (team.permissions || [])) : null;
 
+  // A sub-admin works INSIDE the owner's workspace, so the plan that matters
+  // is the OWNER'S. Reading the sub-admin's own (always "free") profile is
+  // what made the dashboard nag a creator's sub-admin to buy Pro even though
+  // the creator had already paid for it.
+  let planProfile = prof;
+  let planFrom = "self";
+  if (isTeamMember && ownerId && ownerId !== user.id) {
+    const owner = await loadProfile(ownerId);
+    if (owner.prof) { planProfile = owner.prof; planFrom = "owner"; }
+  }
+
+  // Platform staff (super admins and promoted sub-admins) always get Pro
+  // features regardless of what their own plan row says.
+  const staffPro = staff || superAdmin || !!prof?.is_admin || !!prof?.is_super_admin;
+  const isPro = staffPro || isProProfile(planProfile);
+
   return noStore({
     signedIn: true,
     admin,
@@ -77,9 +94,11 @@ export async function GET(req) {
     ownerId,
     permissions,
     teamActive: isTeamMember ? team.active !== false : true,
-    isPro: isProProfile(prof),
-    plan: prof?.plan || "free",
-    planExpiresAt: prof?.plan_expires_at || null,
+    isPro,
+    // Where the plan came from, so the UI can say "your creator's Pro plan".
+    planSource: staffPro && !isProProfile(planProfile) ? "staff" : planFrom,
+    plan: staffPro && !isProProfile(planProfile) ? "pro" : (planProfile?.plan || "free"),
+    planExpiresAt: planProfile?.plan_expires_at || null,
     blocked: !!prof?.blocked,
     profileComplete: !!prof?.profile_complete,
     // Lets the dashboard show payout state without a second round-trip.

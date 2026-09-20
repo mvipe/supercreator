@@ -40,3 +40,21 @@ body {
   height: 0;
   display: none;
 }
+
+/* Copy-link feedback (components/CopyLinkButton.jsx) */
+@keyframes sc-copy-pop {
+  0%   { opacity: 0; transform: translate(-50%, 6px) scale(.85); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@keyframes sc-copy-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+/* Modal/sheet entrance used by the product-picker dialogs */
+@keyframes sc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sc-rise-in {
+  0%   { opacity: 0; transform: translateY(22px) scale(.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sc-fade-in { animation: sc-fade-in .18s ease-out both; }
+.sc-rise-in { animation: sc-rise-in .26s cubic-bezier(.2,1.1,.4,1) both; }

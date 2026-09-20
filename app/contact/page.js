@@ -1,4 +1,5 @@
 import LegalLayout, { Section, Bullets, Callout } from "@/components/LegalLayout";
+import { SUPPORT_TEL_HREF, SUPPORT_PHONE_DISPLAY } from "@/lib/support";
 
 export const metadata = {
   title: "Disclaimer · SuperCreators",
@@ -133,6 +134,19 @@ export default function DisclaimerPage() {
             support@supercreators.in
           </a>{" "}
           and we will review it.
+        </p>
+        {/* Support number. Single source of truth: lib/support.js — the
+            floating WhatsApp button reads the same constant. */}
+        <p>
+          You can also call or WhatsApp us on{" "}
+          <a
+            href={SUPPORT_TEL_HREF}
+            className="font-medium underline"
+            style={{ color: "#2A5DF0" }}
+          >
+            {SUPPORT_PHONE_DISPLAY}
+          </a>
+          .
         </p>
       </Section>
     </LegalLayout>

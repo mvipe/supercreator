@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { insertBooking } from "@/lib/bookings";
 
 export async function POST(req) {
   try {
@@ -23,11 +24,15 @@ export async function POST(req) {
       const { data: session } = await supabaseAdmin.from("mp_sessions").select("*").eq("id", order.product_id).single();
       const starts = new Date(order.meta.startsAt);
       const ends = new Date(starts.getTime() + session.duration_min * 60000);
-      await supabaseAdmin.from("mp_bookings").insert({
+      // Carry the order's commission split onto the booking so booking
+      // revenue means the same thing as every other kind of sale.
+      const pct = order.commission_percentage ?? 0;
+      const fee = order.commission_amount ?? Math.round((order.amount * pct) / 100);
+      await insertBooking({
         session_id: order.product_id, owner_id: order.owner_id, buyer_id: user.id,
         starts_at: starts.toISOString(), ends_at: ends.toISOString(),
         amount: order.amount, buyer_phone: order.buyer_phone, answers: order.answers
-      });
+      }, { commissionPercentage: pct, commissionAmount: fee, creatorAmount: order.creator_amount ?? (order.amount - fee) });
       return NextResponse.json({ ok: true });
     }
 

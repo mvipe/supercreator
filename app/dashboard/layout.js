@@ -47,6 +47,9 @@ export default function DashLayout({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPro, setIsPro] = useState(true); // assume true until known, so no flash
   const [blocked, setBlocked] = useState(false);
+  // A sub-admin runs on the creator's plan, so the upgrade card must not
+  // appear for them — they have nothing to buy.
+  const [canUpgrade, setCanUpgrade] = useState(false);
   const [showSub, setShowSub] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -58,7 +61,12 @@ export default function DashLayout({ children }) {
       ensured.current = true;
       const ref = typeof window !== "undefined" ? localStorage.getItem("mp_ref") : null;
       apiFetch("/api/profile/ensure", { ref }).catch(() => {});
-      fetchMe().then((me) => { setIsAdmin(!!me.admin); setIsPro(!!me.isPro); setBlocked(!!me.blocked); });
+      fetchMe().then((me) => {
+        setIsAdmin(!!me.admin);
+        setIsPro(!!me.isPro);
+        setBlocked(!!me.blocked);
+        setCanUpgrade(!me.isTeamMember && me.planSource !== "owner" && me.planSource !== "staff");
+      });
     }
   }, [user]);
 
@@ -139,7 +147,7 @@ export default function DashLayout({ children }) {
           </Link>
         </nav>
 
-        {!isPro && (
+        {!isPro && canUpgrade && (
           <div className="mx-3.5 mb-3 rounded-[12px] bg-[linear-gradient(135deg,#6a42dc,#332281)] p-4">
             <div className="text-sm font-bold text-white">You're on the Free plan</div>
             <p className="mt-0.5 text-xs text-white/75">Unlock all features and get paid.</p>
@@ -217,7 +225,7 @@ export default function DashLayout({ children }) {
           </Link>
         </nav>
 
-        {!isPro && (
+        {!isPro && canUpgrade && (
           <div className="mx-3.5 mb-3 rounded-[12px] bg-[linear-gradient(135deg,#6a42dc,#332281)] p-4">
             <div className="text-sm font-bold text-white">You're on the Free plan</div>
             <p className="mt-0.5 text-xs text-white/75">Unlock all features and get paid.</p>

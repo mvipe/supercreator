@@ -6,7 +6,26 @@ import { heroSurface, SHEEN } from "@/lib/texture";
 import ConnectPanel from "@/components/autodm/ConnectPanel";
 import RuleModal from "@/components/autodm/RuleModal";
 
-const TABS = ["automations", "activity"];
+const TABS = ["automations", "activity", "insights"];
+
+const fmtNum = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
+
+const INSIGHT_LABELS = {
+  reach: "Reach",
+  accounts_engaged: "Accounts engaged",
+  total_interactions: "Total interactions",
+  profile_views: "Profile views",
+  follower_count: "Followers"
+};
+
+const MEDIA_LABELS = {
+  reach: "Reach",
+  likes: "Likes",
+  comments: "Comments",
+  saved: "Saves",
+  shares: "Shares",
+  total_interactions: "Interactions"
+};
 
 const fmtWhen = (d) => {
   if (!d) return "—";
@@ -36,6 +55,7 @@ export default function AutoDM() {
   const [modal, setModal] = useState({ open: false, rule: null });
   const [notice, setNotice] = useState("");
   const [test, setTest] = useState({ comment: "", result: null, busy: false });
+  const [insights, setInsights] = useState({ data: null, busy: false, loaded: false, error: "" });
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +108,21 @@ export default function AutoDM() {
     setRules((rs) => (rs.some((r) => r.id === rule.id) ? rs.map((r) => (r.id === rule.id ? rule : r)) : [rule, ...rs]));
   }
 
+  const loadInsights = useCallback(async () => {
+    setInsights((s) => ({ ...s, busy: true, error: "" }));
+    try {
+      const res = await apiFetch("/api/instagram/insights", undefined, "GET");
+      setInsights({ data: res, busy: false, loaded: true, error: res?.error || "" });
+    } catch (e) {
+      setInsights({ data: null, busy: false, loaded: true, error: e.message || "Could not load insights." });
+    }
+  }, []);
+
+  // Pull insights the first time the tab is opened (and let it be refreshed).
+  useEffect(() => {
+    if (tab === "insights" && account && !insights.loaded && !insights.busy) loadInsights();
+  }, [tab, account, insights.loaded, insights.busy, loadInsights]);
+
   async function runTest() {
     setTest((t) => ({ ...t, busy: true, result: null }));
     try {
@@ -133,7 +168,7 @@ export default function AutoDM() {
                   {TABS.map((t) => (
                     <button key={t} onClick={() => setTab(t)}
                       className={`rounded-full border px-4 py-1.5 text-sm font-semibold capitalize ${tab === t ? "border-ink bg-ink text-white" : "border-line bg-white text-inkmuted hover:text-ink"}`}>
-                      {t === "activity" ? `Activity (${logs.length})` : `Automations (${rules.length})`}
+                      {t === "activity" ? `Activity (${logs.length})` : t === "insights" ? "Insights" : `Automations (${rules.length})`}
                     </button>
                   ))}
                   <button onClick={() => setModal({ open: true, rule: null })} className="btn-brand ml-auto">New automation</button>
@@ -224,6 +259,65 @@ export default function AutoDM() {
                         <div className="col-span-1 text-right text-[11px] text-inkmuted">{fmtWhen(l.created_at)}</div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {tab === "insights" && (
+                  <div className="mt-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-display text-base font-bold">Account insights</h3>
+                        <p className="mt-0.5 text-sm text-inkmuted">
+                          Pulled live from Instagram for @{account?.username || "your account"}
+                          {insights.data?.insights?.period_days ? ` · last ${insights.data.insights.period_days} days` : ""}.
+                        </p>
+                      </div>
+                      <button onClick={loadInsights} disabled={insights.busy} className="btn-ghost">
+                        {insights.busy ? "Refreshing…" : "Refresh"}
+                      </button>
+                    </div>
+
+                    {insights.busy && !insights.data && (
+                      <div className="card p-12 text-center text-sm text-inkmuted">Loading insights…</div>
+                    )}
+
+                    {insights.error && (
+                      <div className="card p-5 text-sm text-danger">{insights.error}</div>
+                    )}
+
+                    {insights.data?.insights?.metrics && (
+                      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                        {Object.keys(INSIGHT_LABELS).map((key) => (
+                          <div key={key} className="card p-5">
+                            <div className="text-xs font-semibold uppercase text-inkmuted">{INSIGHT_LABELS[key]}</div>
+                            <div className="mt-1 font-display text-2xl font-bold">{fmtNum(insights.data.insights.metrics[key])}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {insights.data?.media?.metrics && (
+                      <div className="card p-5">
+                        <h3 className="font-display text-base font-bold">Latest post</h3>
+                        <p className="mt-0.5 text-sm text-inkmuted">Insights for your most recent post.</p>
+                        <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
+                          {Object.keys(MEDIA_LABELS)
+                            .filter((k) => insights.data.media.metrics[k] !== undefined)
+                            .map((k) => (
+                              <div key={k}>
+                                <div className="text-xs font-semibold uppercase text-inkmuted">{MEDIA_LABELS[k]}</div>
+                                <div className="mt-0.5 font-display text-xl font-bold">{fmtNum(insights.data.media.metrics[k])}</div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {insights.loaded && !insights.error && insights.data?.errors?.length > 0 && (
+                      <div className="card p-4 text-[13px] text-inkmuted">
+                        Some metrics weren’t available for this account: {insights.data.errors.map((e) => e.metric || e.scope).filter(Boolean).join(", ")}.
+                      </div>
+                    )}
                   </div>
                 )}
               </>

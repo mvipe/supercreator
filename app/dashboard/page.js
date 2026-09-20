@@ -5,6 +5,8 @@ import { supabase, apiFetch } from "@/lib/supabase";
 import { useAuth } from "@/components/AuthProvider";
 import CompleteProfileModal from "@/components/CompleteProfileModal";
 import NotificationCenter from "@/components/NotificationCenter";
+import CreateProductModal from "@/components/CreateProductModal";
+import SellDigitalModal from "@/components/SellDigitalModal";
 import { fetchMe } from "@/lib/plan";
 import { inr } from "@/lib/courseModel";
 import { BRAND } from "@/lib/brand";
@@ -112,6 +114,10 @@ export default function GettingStarted() {
   const [showProfile, setShowProfile] = useState(false);
   const [profileDone, setProfileDone] = useState(true);
   const [bannerOpen, setBannerOpen] = useState(true);
+  // "Create a product" → the six-type picker; "Sell Digital Products" → the
+  // three-way digital/multiple/existing chooser.
+  const [showCreate, setShowCreate] = useState(false);
+  const [showSell, setShowSell] = useState(false);
   const rangeRef = useRef(null);
 
   const loadPlan = useCallback(async () => setMe(await fetchMe()), []);
@@ -179,10 +185,21 @@ export default function GettingStarted() {
               </Link>
             </div>
           ) : <span />}
-          <div className="shrink-0 rounded-[13px] bg-white p-0.5 shadow-[0_6px_15px_#20336618]">
-            <span className="[&_button]:!text-[#0e1530] [&_button:hover]:!bg-[#f5f5fb]">
-              <NotificationCenter />
-            </span>
+          <div className="flex shrink-0 items-center gap-2.5">
+            {/* Create a product — opens the six-type picker right here, so a
+                creator never has to guess which hub page to visit first. */}
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-[#11162c] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_6px_15px_#20336626] transition-transform hover:-translate-y-px sm:px-5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="h-4 w-4"><path d="M12 5v14M5 12h14" /></svg>
+              <span className="hidden sm:inline">Create a product</span>
+              <span className="sm:hidden">Create</span>
+            </button>
+            <div className="rounded-[13px] bg-white p-0.5 shadow-[0_6px_15px_#20336618]">
+              <span className="[&_button]:!text-[#0e1530] [&_button:hover]:!bg-[#f5f5fb]">
+                <NotificationCenter />
+              </span>
+            </div>
           </div>
         </div>
 
@@ -228,7 +245,24 @@ export default function GettingStarted() {
           <div className="mt-4 grid gap-5 sm:grid-cols-3">
             <Kpi tone="purple" icon={<IconTrend className="h-8 w-8" />} label="Store Visits" value={stats ? String(stats.visits.value) : null} change={stats?.visits.change} changeLabel={stats?.rangeLabel} />
             <Kpi tone="blue" icon={<IconBag className="h-8 w-8" />} label="Sales" value={stats ? String(stats.sales.value) : null} change={stats?.sales.change} changeLabel={stats?.rangeLabel} />
-            <Kpi tone="green" icon={<IconDiamond className="h-8 w-8" />} label="Total Revenue" value={stats ? inr(stats.revenue.value) : null} change={stats?.revenue.change} changeLabel={stats?.rangeLabel} last />
+            {/* Net of the platform fee — this is money the creator can withdraw,
+                not the buyer's gross. The fee is spelled out underneath. */}
+            <Kpi tone="green" icon={<IconDiamond className="h-8 w-8" />} label="Your Earnings"
+              value={stats ? inr(stats.revenue.value) : null}
+              change={stats?.revenue.change}
+              changeLabel={stats ? `after ${inr(stats.revenue.fee || 0)} platform fee${stats.rangeLabel ? ` · ${stats.rangeLabel}` : ""}` : stats?.rangeLabel}
+              last />
+          </div>
+
+          {/* Lifetime total — "what you've earned so far", independent of the filter. */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-4 text-xs text-white/70">
+            <span>
+              Total earned (all time):{" "}
+              <b className="text-sm text-white">{stats ? inr(stats.lifetime?.net || 0) : "—"}</b>
+            </span>
+            <span>Gross sales: <b className="text-white/90">{stats ? inr(stats.lifetime?.gross || 0) : "—"}</b></span>
+            <span>Platform fee: <b className="text-white/90">−{stats ? inr(stats.lifetime?.fee || 0) : "—"}</b></span>
+            <Link href="/dashboard/payments" className="ml-auto font-semibold text-white underline underline-offset-2">Payments →</Link>
           </div>
         </section>
 
@@ -251,7 +285,9 @@ export default function GettingStarted() {
               <h2 className="text-lg font-bold tracking-tight text-[#11162c]">How Top Creators are using {BRAND.name}</h2>
               <div className="mt-2 h-[3px] w-6 bg-[#7d55f5]" />
               <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <FeatureCard tone="purple" href="/dashboard/books" art={<ArtProducts />} title="Sell Digital Products" desc="Sell videos, photos, documents and more in seconds." />
+                {/* This one opens a chooser instead of jumping straight to the
+                    Books hub — digital sellers land on three different flows. */}
+                <FeatureCard tone="purple" onClick={() => setShowSell(true)} art={<ArtProducts />} title="Sell Digital Products" desc="Sell videos, photos, documents and more in seconds." />
                 <FeatureCard tone="blue" href="/dashboard/bookings" art={<ArtSessions />} title="Offer 1:1 Sessions" desc="Launch personal coaching in a fraction of minutes." />
                 <FeatureCard tone="green" href="/dashboard/courses" art={<ArtCourse />} title="Launch a Course" desc="Create full-length courses with lots of customisation." />
               </div>
@@ -321,6 +357,8 @@ export default function GettingStarted() {
       {showProfile && (
         <CompleteProfileModal onClose={() => setShowProfile(false)} onSaved={() => { setShowProfile(false); refresh(); }} />
       )}
+      <CreateProductModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <SellDigitalModal open={showSell} onClose={() => setShowSell(false)} />
     </main>
   );
 }
@@ -406,10 +444,12 @@ function ArtCourse() {
   );
 }
 
-function FeatureCard({ tone, href, art, title, desc }) {
+/** Renders as a link when given `href`, or a button when given `onClick`. */
+function FeatureCard({ tone, href, onClick, art, title, desc }) {
   const t = TONE[tone];
-  return (
-    <Link href={href} className={`relative flex min-h-[168px] items-stretch gap-3 rounded-2xl p-4 ${t.card}`}>
+  const cls = `relative flex min-h-[168px] w-full items-stretch gap-3 rounded-2xl p-4 text-left transition-transform hover:-translate-y-0.5 ${t.card}`;
+  const inner = (
+    <>
       <div className="w-[72px] shrink-0">{art}</div>
       <div className="flex min-w-0 flex-1 flex-col justify-center pr-3">
         <h4 className="text-xs font-bold leading-snug text-[#11162c]">{title}</h4>
@@ -418,8 +458,10 @@ function FeatureCard({ tone, href, art, title, desc }) {
       <span className={`absolute bottom-3 right-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white ${t.arrow}`}>
         <IconArrow className="h-3.5 w-3.5" />
       </span>
-    </Link>
+    </>
   );
+  if (onClick) return <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+  return <Link href={href} className={cls}>{inner}</Link>;
 }
 
 function MiniStat({ tone, icon, label, value }) {

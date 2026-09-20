@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
+import { earningsBreakdown } from "@/lib/earnings";
 
 export const dynamic = "force-dynamic";
 
@@ -83,27 +84,38 @@ export async function GET(req) {
           status: "paid"
         };
       }),
-      ...books.map((b) => ({
-        id: b.id,
-        created_at: b.created_at,
-        product_type: "booking",
-        product_id: b.session_id,
-        product_name: titleOf("booking", b.session_id),
-        buyer_name: nameFrom(b.answers),
-        buyer_email: emailFrom(b.answers),
-        buyer_phone: b.buyer_phone,
-        amount: b.amount,
-        gross_amount: b.amount,
-        commission_amount: 0,
-        commission_percentage: null,
-        creator_amount: b.amount,
-        razorpay_payment_id: null,
-        razorpay_order_id: null,
-        coupon: null,
-        status: b.status === "cancelled" ? "refunded" : "paid",
-        starts_at: b.starts_at
-      }))
+      ...books.map((b) => {
+        // Bookings booked before revenue_and_covers.sql have no split stored,
+        // so netPaise() falls back to the gross rather than reporting ₹0.
+        const fee = b.commission_amount ?? 0;
+        const net = b.creator_amount ?? Math.max(0, (b.amount || 0) - fee);
+        return {
+          id: b.id,
+          created_at: b.created_at,
+          product_type: "booking",
+          product_id: b.session_id,
+          product_name: titleOf("booking", b.session_id),
+          buyer_name: nameFrom(b.answers),
+          buyer_email: emailFrom(b.answers),
+          buyer_phone: b.buyer_phone,
+          amount: net,
+          gross_amount: b.amount,
+          commission_amount: fee,
+          commission_percentage: b.commission_percentage ?? null,
+          creator_amount: net,
+          razorpay_payment_id: null,
+          razorpay_order_id: null,
+          coupon: null,
+          status: b.status === "cancelled" ? "refunded" : "paid",
+          starts_at: b.starts_at
+        };
+      })
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    // Headline numbers, computed server-side so every client agrees.
+    // `net` is what the creator keeps; `gross` is what buyers paid.
+    const totals = earningsBreakdown(rows.filter((r) => r.status === "paid"));
+    const refunded = rows.filter((r) => r.status !== "paid").length;
 
     const seller = {
       name: profile?.full_name || profile?.display_name || "",
@@ -112,7 +124,10 @@ export async function GET(req) {
       phone: profile?.phone_number || ""
     };
 
-    return NextResponse.json({ rows, seller }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { rows, seller, totals: { ...totals, refunded }, generatedAt: new Date().toISOString() },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

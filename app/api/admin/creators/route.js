@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, isSuperAdmin, isStaff } from "@/lib/supabaseAdmin";
+import { netPaise, grossPaise, feePaise } from "@/lib/earnings";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,16 @@ async function requireStaff(req) {
 const FULL_SELECT = "user_id, username, display_name, full_name, business_name, email, phone_number, blocked, is_super_admin, is_admin, plan, plan_expires_at, created_at";
 const RICH_SELECT = "user_id, username, display_name, full_name, business_name, email, phone_number, blocked, is_super_admin, plan, plan_expires_at, created_at";
 const SAFE_SELECT = "user_id, username, display_name, created_at";
+
+/**
+ * Bookings with their commission split when the DB has those columns
+ * (revenue_and_covers.sql), falling back to the legacy shape otherwise.
+ */
+async function bookingRows() {
+  const rich = await supabaseAdmin.from("mp_bookings").select("owner_id, amount, status, creator_amount, commission_amount");
+  if (!rich.error) return rich;
+  return supabaseAdmin.from("mp_bookings").select("owner_id, amount, status");
+}
 
 export async function GET(req) {
   const auth = await requireStaff(req);
@@ -48,27 +59,65 @@ export async function GET(req) {
     // Revenue per creator (purchases + bookings). Select the columns we
     // actually read — creator_amount was being read but never selected, so
     // every creator silently fell back to gross.
-    const [{ data: purchases }, { data: bookings }] = await Promise.all([
-      supabaseAdmin.from("mp_purchases").select("owner_id, amount, creator_amount"),
-      supabaseAdmin.from("mp_bookings").select("owner_id, amount, status")
+    const [{ data: purchases }, { data: bookings }, { data: courses }, { data: products }] = await Promise.all([
+      supabaseAdmin.from("mp_purchases").select("owner_id, amount, creator_amount, commission_amount"),
+      bookingRows(),
+      supabaseAdmin.from("mp_courses").select("owner_id, status"),
+      supabaseAdmin.from("mp_products").select("owner_id, status")
     ]);
 
-    const rev = {};
-    for (const p of purchases || []) {
-      rev[p.owner_id] = (rev[p.owner_id] || 0) + ((p.creator_amount != null ? p.creator_amount : p.amount) || 0);
-    }
-    for (const b of bookings || []) {
-      if (b.status !== "cancelled") rev[b.owner_id] = (rev[b.owner_id] || 0) + (b.amount || 0);
+    const rev = {}, gross = {}, fee = {}, sales = {};
+    const add = (id, row) => {
+      rev[id] = (rev[id] || 0) + netPaise(row);
+      gross[id] = (gross[id] || 0) + grossPaise(row);
+      fee[id] = (fee[id] || 0) + feePaise(row);
+      sales[id] = (sales[id] || 0) + 1;
+    };
+    for (const p of purchases || []) add(p.owner_id, p);
+    for (const b of bookings || []) if (b.status !== "cancelled") add(b.owner_id, b);
+
+    // How much is actually ON each store — the admin needs to tell a real
+    // storefront apart from an empty signup.
+    const live = {}, drafts = {};
+    for (const x of [...(courses || []), ...(products || [])]) {
+      if (x.status === "published") live[x.owner_id] = (live[x.owner_id] || 0) + 1;
+      else drafts[x.owner_id] = (drafts[x.owner_id] || 0) + 1;
     }
 
     const now = new Date();
     const rows = profiles.map((p) => ({
       ...p,
       revenue: (rev[p.user_id] || 0) / 100,
-      isPro: p.plan === "pro" && p.plan_expires_at && new Date(p.plan_expires_at) > now
+      grossRevenue: (gross[p.user_id] || 0) / 100,
+      platformFee: (fee[p.user_id] || 0) / 100,
+      sales: sales[p.user_id] || 0,
+      // A "store" exists once the creator has claimed a username — that's the
+      // public URL buyers visit.
+      store: p.username
+        ? {
+            name: p.business_name || p.display_name || p.full_name || `@${p.username}`,
+            username: p.username,
+            url: `/u/${p.username}`,
+            liveProducts: live[p.user_id] || 0,
+            draftProducts: drafts[p.user_id] || 0
+          }
+        : null,
+      isPro: (p.plan === "pro" && p.plan_expires_at && new Date(p.plan_expires_at) > now) || !!p.is_admin || !!p.is_super_admin
     }));
 
-    return NextResponse.json({ creators: rows, total: rows.length, warning }, {
+    const storeRows = rows.filter((r) => r.store);
+
+    return NextResponse.json({
+      creators: rows,
+      total: rows.length,
+      // Store roll-up for the panel header.
+      stores: {
+        total: storeRows.length,
+        withProducts: storeRows.filter((r) => r.store.liveProducts > 0).length,
+        list: storeRows.map((r) => ({ userId: r.user_id, ...r.store, revenue: r.revenue }))
+      },
+      warning
+    }, {
       headers: { "Cache-Control": "no-store" }
     });
   } catch (e) {

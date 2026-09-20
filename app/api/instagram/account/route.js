@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest, getActiveOwnerId } from "@/lib/supabaseAdmin";
-import { oauthConfigured, oauthProblem, redirectUri } from "@/lib/instagram";
+import { oauthConfigured, oauthProblem, redirectUri, originFrom, publicOrigin } from "@/lib/instagram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,9 +20,8 @@ export async function GET(req) {
     .eq("active", true)
     .maybeSingle();
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin).replace(/\/$/, "");
-
-  const origin = new URL(req.url).origin;
+  const origin = originFrom(req);
+  const appUrl = publicOrigin(origin);
 
   return NextResponse.json({
     account: data || null,
