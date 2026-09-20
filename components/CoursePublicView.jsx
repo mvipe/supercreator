@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { inr, lessonCount, effectivePrice, ytEmbed } from "@/lib/courseModel";
 import { BuiltWithLink, CreatorChip } from "@/components/Branding";
+import CopyLinkButton from "@/components/CopyLinkButton";
 import { INDIAN_STATES } from "@/lib/india";
 
 /**
@@ -173,11 +174,16 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
           </form>
         )}
 
+        {/* Copying used to happen silently — the button looked broken. It now
+            confirms with a tick, an accent flash and a floating pill. */}
         {mode === "live" && (
-          <button type="button" onClick={() => { navigator.clipboard?.writeText(window.location.href); }}
-            className="mt-3 w-full rounded-xl border px-4 py-2.5 text-xs font-semibold" style={{ borderColor: border, color: muted }}>
-            🔗 Copy link — invite your network
-          </button>
+          <div className="mt-3">
+            <CopyLinkButton
+              accent={accent}
+              className="rounded-xl border px-4 py-2.5 text-xs font-semibold"
+              style={{ borderColor: border, color: muted }}
+            />
+          </div>
         )}
       </div>
     );
@@ -192,7 +198,7 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
           should feel like the creator's, not ours. */}
       {mode === "live" && !compact && (
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 pt-4 sm:px-8">
-          <CreatorChip name={creator?.name} avatar={creator?.avatar} light={dark} />
+          <CreatorChip name={creator?.name} avatar={creator?.avatar} username={creator?.username} light={dark} />
           <BuiltWithLink light={dark} />
         </div>
       )}

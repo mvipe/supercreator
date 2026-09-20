@@ -31,7 +31,7 @@ const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim())
  *
  * price: { isFree, isPwyw, min, label } — display only; server recomputes.
  */
-export default function CheckoutModal({ productType, productId, title, accent = "#2E6EF7", questions, price, allowCoupon = false, meta = {}, user, onClose, onSuccess }) {
+export default function CheckoutModal({ productType, productId, title, accent = "#2E6EF7", questions, price, allowCoupon = false, meta = {}, user, onClose, onSuccess, inline = false }) {
   const guest = !user;
   const qs = questions?.length ? questions : DEFAULT_QUESTIONS;
   const [answers, setAnswers] = useState(() =>
@@ -145,17 +145,30 @@ export default function CheckoutModal({ productType, productId, title, accent = 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="font-display text-lg font-bold">{title}</h2>
-            <p className="text-sm text-inkmuted">
-              {guest ? "Access will be sent to the email you enter below." : `Signed in as +${user.user_metadata?.phone}`}
-            </p>
+    <div className={inline ? "rounded-2xl border border-line bg-white p-5 shadow-sm" : "fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"} onClick={inline ? undefined : onClose}>
+      <div className={inline ? "" : "max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl"} onClick={inline ? undefined : (e) => e.stopPropagation()}>
+        {inline ? (
+          <>
+            {meta.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {meta.map(([icon, text], i) => (
+                  <div key={i} className="flex items-center gap-2.5 text-sm text-inkmuted"><span>{icon}</span><span>{text}</span></div>
+                ))}
+              </div>
+            )}
+            <div className="font-display text-3xl font-bold">{price?.isFree ? "Free" : effectiveLabel}</div>
+          </>
+        ) : (
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="font-display text-lg font-bold">{title}</h2>
+              <p className="text-sm text-inkmuted">
+                {guest ? "Access will be sent to the email you enter below." : `Signed in as +${user.user_metadata?.phone}`}
+              </p>
+            </div>
+            <button onClick={onClose} className="rounded-lg p-1 text-inkmuted hover:bg-paper" aria-label="Close">✕</button>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-inkmuted hover:bg-paper" aria-label="Close">✕</button>
-        </div>
+        )}
         <form onSubmit={pay} className="mt-5 space-y-4">
           {guest ? (
             <>

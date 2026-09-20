@@ -24,10 +24,12 @@ export function StatsHero({ title, subtitle, cta, onCta, stats, banner, tone }) 
       </div>
       {stats && (
         <div className="relative mt-8 grid gap-4 sm:grid-cols-3">
-          {stats.map(([l, v]) => (
+          {stats.map(([l, v, sub]) => (
             <div key={l} className="rounded-card bg-white p-5 text-ink shadow-sm">
               <div className="text-xs font-semibold uppercase tracking-wide text-inkmuted">{l}</div>
               <div className="mt-1 font-display text-3xl font-bold">{v}</div>
+              {/* optional footnote — used to spell out the platform-fee split */}
+              {sub && <div className="mt-1 text-[11px] leading-snug text-inkmuted">{sub}</div>}
             </div>
           ))}
         </div>

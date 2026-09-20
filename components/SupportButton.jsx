@@ -1,11 +1,13 @@
 "use client";
 
-// Floating WhatsApp support button (bottom-right). Set your number below.
-const SUPPORT_PHONE = "919241571892"; // international format, no +
-const SUPPORT_MSG = "Hi SuperCreators team, I need help with my account.";
+import { supportWhatsAppHref } from "@/lib/support";
+
+// Floating WhatsApp support button (bottom-right).
+// The number itself lives in lib/support.js so the button and the Contact
+// page can never drift apart.
 
 export default function SupportButton() {
-  const href = `https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(SUPPORT_MSG)}`;
+  const href = supportWhatsAppHref();
   return (
     // Phones: icon only, floated just above the bottom nav (nav is ~60px tall,
     // so bottom-[72px] clears it with a small gap). sm+: icon + "Support" text

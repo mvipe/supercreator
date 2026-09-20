@@ -75,16 +75,6 @@ export default function PublicProductPage({ type, View }) {
 
   const unlocked = type === "locked" && owned;
   const showEventAccess = type === "event" && owned;
-  const inlineCheckout = (type === "book" || type === "payment") ? (
-    <CheckoutModal
-      inline productType={type} productId={product.id} title={product.title} accent={d.accent}
-      price={priceInfo} user={user} allowCoupon={!priceInfo.isFree}
-      meta={type === "book"
-        ? [["📦", `${d.format || "PDF"} download`], ["♾️", "Lifetime access"]]
-        : [["💳", "One-time payment"], ["🔒", "Secure payment via Razorpay"]]}
-      onSuccess={() => { setOwned(true); setJustPaid(true); window.scrollTo(0, 0); }}
-    />
-  ) : null;
 
   return (
     <>
@@ -105,8 +95,13 @@ export default function PublicProductPage({ type, View }) {
           {d.successMessage || "Payment received. Thank you!"}
         </div>
       )}
+      {/* Book & payment pages render the checkout form inline (like courses),
+          so they never open the modal — they get `user` + `onPaid` instead of
+          relying on `onBuy`. Event & locked keep the modal. */}
       <View product={product} mode="live" onBuy={onBuy} unlocked={unlocked} owned={owned}
-        registered={showEventAccess} creator={creator} inlineCheckout={inlineCheckout} />
+        registered={showEventAccess} creator={creator}
+        user={user}
+        onPaid={() => { setOwned(true); setJustPaid(true); window.scrollTo(0, 0); }} />
       {checkout && (
         <CheckoutModal productType={type} productId={product.id} title={product.title} accent={d.accent}
           price={priceInfo} user={user} allowCoupon={!priceInfo.isFree}

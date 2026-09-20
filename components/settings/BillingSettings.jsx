@@ -93,6 +93,13 @@ export default function BillingSettings() {
   const isPro = !!me?.isPro;
   const expires = me?.planExpiresAt;
   const daysLeft = expires ? Math.ceil((new Date(expires) - new Date()) / 86400000) : null;
+  // A sub-admin operates inside the creator's workspace and shares the
+  // creator's plan — they must never be asked to buy one of their own.
+  // `planSource` comes from /api/me: "owner" = the creator's plan,
+  // "staff" = platform admin comp.
+  const inherited = me?.planSource === "owner" || me?.isTeamMember;
+  const staffComp = me?.planSource === "staff";
+  const canBuy = !inherited && !staffComp;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -108,7 +115,16 @@ export default function BillingSettings() {
             <div className="mt-2 font-display text-2xl font-bold">
               {isPro ? "Pro plan" : "Free plan (Starter)"}
             </div>
-            {isPro && expires && (
+            {inherited && (
+              <div className="mt-1 text-sm text-inkmuted">
+                You're a sub-admin — this workspace runs on the creator's plan.
+                There's nothing for you to buy.
+              </div>
+            )}
+            {staffComp && (
+              <div className="mt-1 text-sm text-inkmuted">Included with your admin access.</div>
+            )}
+            {isPro && !inherited && !staffComp && expires && (
               <div className="mt-1 text-sm text-inkmuted">
                 Renews / expires on <b className="text-ink">{fmtDate(expires)}</b>
                 {daysLeft != null && daysLeft >= 0 && ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
@@ -122,12 +138,12 @@ export default function BillingSettings() {
           {isPro && <span className="pill bg-teal-soft text-teal">Active</span>}
         </div>
 
-        {!isPro && (
+        {canBuy && !isPro && (
           <button onClick={() => setShowUpgrade(true)} className="btn btn-brand mt-4">
             Upgrade to Pro — {planDetails.proPlanPriceDisplay}/month
           </button>
         )}
-        {isPro && (
+        {canBuy && isPro && (
           <button onClick={() => setShowUpgrade(true)} className="btn-ghost mt-4">
             Extend by 30 days — {planDetails.proPlanPriceDisplay}
           </button>

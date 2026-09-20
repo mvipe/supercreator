@@ -106,6 +106,49 @@ function CouponsField({ d, patchData }) {
   );
 }
 
+/** Bullet-point highlights — the "What's included" list a course page has. */
+function HighlightsField({ d, patchData, label = "What's included", hint = "One bullet per line — shown as a checklist on the page" }) {
+  const list = d.highlights || [];
+  return (
+    <Field label={label} hint={hint}>
+      <div className="space-y-2">
+        {list.map((h, i) => (
+          <div key={i} className="flex gap-2">
+            <input className="input" value={h}
+              onChange={(e) => patchData({ highlights: list.map((x, j) => (j === i ? e.target.value : x)) })} />
+            <button type="button" className="shrink-0 px-2 text-sm font-semibold text-danger"
+              onClick={() => patchData({ highlights: list.filter((_, j) => j !== i) })}>✕</button>
+          </div>
+        ))}
+        <button type="button" className="btn-ghost" onClick={() => patchData({ highlights: [...list, ""] })}>+ Add point</button>
+      </div>
+    </Field>
+  );
+}
+
+/** FAQ accordion, same as the course sales page. */
+function FaqField({ d, patchData }) {
+  const list = d.faqs || [];
+  const set = (i, patch) => patchData({ faqs: list.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+  return (
+    <Field label="FAQs" hint="Answer the questions buyers ask before paying">
+      <div className="space-y-3">
+        {list.map((f, i) => (
+          <div key={i} className="space-y-2 rounded-lg border border-line p-3">
+            <div className="flex gap-2">
+              <input className="input" placeholder="Question" value={f.q || ""} onChange={(e) => set(i, { q: e.target.value })} />
+              <button type="button" className="shrink-0 px-2 text-sm font-semibold text-danger"
+                onClick={() => patchData({ faqs: list.filter((_, j) => j !== i) })}>✕</button>
+            </div>
+            <textarea className="input min-h-[60px]" placeholder="Answer" value={f.a || ""} onChange={(e) => set(i, { a: e.target.value })} />
+          </div>
+        ))}
+        <button type="button" className="btn-ghost" onClick={() => patchData({ faqs: [...list, { q: "", a: "" }] })}>+ Add FAQ</button>
+      </div>
+    </Field>
+  );
+}
+
 /* ---------------- EVENT FORM ---------------- */
 export function EventForm({ product, patch, patchData }) {
   const d = product.data;
@@ -206,17 +249,36 @@ export function LockedForm({ product, patch, patchData }) {
 }
 
 /* ---------------- PAYMENT PAGE FORM ---------------- */
+/**
+ * Page Details for a payment page — deliberately the same shape as the course
+ * editor: cover image (upload or video link) → description → highlights →
+ * pricing → coupons → FAQs → button → URL. The old version only had a title,
+ * a description and an amount, so a payment page looked nothing like the rest
+ * of the creator's catalogue.
+ */
 export function PaymentForm({ product, patch, patchData }) {
   const d = product.data;
   return (
     <div className="space-y-6">
-      <h2 className="font-display text-xl font-bold">Set up your payment page</h2>
-      <Field label="Title" required counter={`${product.title.length}/75`}>
+      <h2 className="font-display text-xl font-bold">Tell us about your payment page</h2>
+      <Field label="Payment page title" required counter={`${product.title.length}/75`}>
         <input className="input" maxLength={75} value={product.title} onChange={(e) => patch({ title: e.target.value })} />
       </Field>
-      <Field label="Description" required>
-        <textarea className="input min-h-[110px]" value={d.description} onChange={(e) => patchData({ description: e.target.value })} />
+      <Field label="Subtitle" hint="One short line under the title (optional)">
+        <input className="input" maxLength={120} value={d.subtitle || ""} onChange={(e) => patchData({ subtitle: e.target.value })} />
       </Field>
+
+      {/* Cover media — saved onto the product exactly like a course cover. */}
+      <ImagesField label="Cover image" images={d.coverImages || []} onChange={(coverImages) => patchData({ coverImages })} />
+      <Field label="Or add a video link" hint="YouTube or Vimeo — shown instead of the first image">
+        <input className="input" placeholder="https://youtu.be/…" value={d.coverVideo || ""} onChange={(e) => patchData({ coverVideo: e.target.value })} />
+      </Field>
+
+      <Field label="Description" required hint="What is this payment for? What does the buyer get?">
+        <textarea className="input min-h-[130px]" value={d.description} onChange={(e) => patchData({ description: e.target.value })} />
+      </Field>
+      <HighlightsField d={d} patchData={patchData} label="What's included" />
+
       <div className="flex gap-3">
         <RadioCard checked={d.priceMode === "fixed"} title="Fixed amount" onClick={() => patchData({ priceMode: "fixed" })} />
         <RadioCard checked={d.priceMode === "pwyw"} title="Customer decides" onClick={() => patchData({ priceMode: "pwyw" })} />
@@ -225,6 +287,27 @@ export function PaymentForm({ product, patch, patchData }) {
         ? <><Field label="Amount (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field><DiscountFields d={d} patchData={patchData} /></>
         : <Field label="Minimum amount (₹)" required><input className="input" type="number" min="1" value={d.minPrice} onChange={(e) => patchData({ minPrice: Number(e.target.value) })} /></Field>}
       <CouponsField d={d} patchData={patchData} />
+
+      <Field label="What to collect from the buyer" hint="Email and phone are always collected for the receipt">
+        <div className="space-y-2">
+          <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold">
+            <input type="checkbox" className="h-4 w-4 accent-brand" checked={d.collectName !== false}
+              onChange={(e) => patchData({ collectName: e.target.checked })} /> Full name
+          </label>
+          <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold">
+            <input type="checkbox" className="h-4 w-4 accent-brand" checked={!!d.collectNote}
+              onChange={(e) => patchData({ collectNote: e.target.checked })} /> A short note / reference
+          </label>
+          {d.collectNote && (
+            <input className="input" placeholder="Note label" value={d.noteLabel || ""} onChange={(e) => patchData({ noteLabel: e.target.value })} />
+          )}
+        </div>
+      </Field>
+
+      <FaqField d={d} patchData={patchData} />
+      <Field label="Thank-you message" hint="Shown right after a successful payment">
+        <input className="input" value={d.successMessage || ""} onChange={(e) => patchData({ successMessage: e.target.value })} />
+      </Field>
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />
       </Field>
@@ -260,10 +343,17 @@ export function BookForm({ product, patch, patchData }) {
         <input className="input" maxLength={75} value={product.title} onChange={(e) => patch({ title: e.target.value })} />
       </Field>
       <Field label="Author"><input className="input" value={d.author} onChange={(e) => patchData({ author: e.target.value })} placeholder="Your name" /></Field>
-      <ImagesField label="Cover image" images={d.coverImages} onChange={(coverImages) => patchData({ coverImages })} />
-      <Field label="Description" required>
-        <textarea className="input min-h-[110px]" value={d.description} onChange={(e) => patchData({ description: e.target.value })} />
+      <Field label="Subtitle" hint="One short line under the title (optional)">
+        <input className="input" maxLength={120} value={d.subtitle || ""} onChange={(e) => patchData({ subtitle: e.target.value })} />
       </Field>
+      <ImagesField label="Cover image" images={d.coverImages} onChange={(coverImages) => patchData({ coverImages })} />
+      <Field label="Or add a video link" hint="A trailer / flip-through — shown above the cover">
+        <input className="input" placeholder="https://youtu.be/…" value={d.coverVideo || ""} onChange={(e) => patchData({ coverVideo: e.target.value })} />
+      </Field>
+      <Field label="Description" required>
+        <textarea className="input min-h-[130px]" value={d.description} onChange={(e) => patchData({ description: e.target.value })} />
+      </Field>
+      <HighlightsField d={d} patchData={patchData} label="What's inside" hint="Chapters, bonuses, templates — shown as a checklist" />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Pages"><input className="input" type="number" min="0" value={d.pages} onChange={(e) => patchData({ pages: Number(e.target.value) })} /></Field>
         <Field label="Format">
@@ -299,6 +389,7 @@ export function BookForm({ product, patch, patchData }) {
         ? <><Field label="Price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field><DiscountFields d={d} patchData={patchData} /></>
         : <Field label="Minimum price (₹)" required><input className="input" type="number" min="1" value={d.minPrice} onChange={(e) => patchData({ minPrice: Number(e.target.value) })} /></Field>}
       <CouponsField d={d} patchData={patchData} />
+      <FaqField d={d} patchData={patchData} />
       <Field label="Button text" counter={`${(d.buttonText || "").length}/25`}>
         <input className="input" maxLength={25} value={d.buttonText} onChange={(e) => patchData({ buttonText: e.target.value })} />
       </Field>

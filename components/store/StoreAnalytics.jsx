@@ -364,7 +364,9 @@ export default function StoreAnalytics() {
         <Kpi label="Clicks" value={num(t.clicks)} />
         <Kpi label="CTR" value={`${t.ctr}%`} hint="Clicks ÷ visits" />
         <Kpi label="Sales" value={num(t.sales)} />
-        <Kpi label="Revenue" value={inr(t.revenue)} />
+        {/* Net of the platform fee — the buyer's gross is in the tooltip. */}
+        <Kpi label="Your earnings" value={inr(t.revenue)}
+          hint={`${inr(t.grossRevenue ?? t.revenue)} gross − ${inr(t.platformFee ?? 0)} platform fee`} />
       </div>
 
       <Card title="Visits & clicks over time">

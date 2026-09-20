@@ -73,17 +73,47 @@ export function BuiltWithLink({ light = true, className = "" }) {
   );
 }
 
-/** Creator chip for the top-left of a product page (avatar + name). */
-export function CreatorChip({ name, avatar, light = true }) {
+/**
+ * Creator chip for the top-left of a product page (avatar + name).
+ *
+ * When the creator has a store username the whole chip becomes a link to
+ * their store — buyers kept tapping the avatar expecting the creator's page
+ * and nothing happened. `href` overrides the derived `/u/<username>` target.
+ */
+export function CreatorChip({ name, avatar, username, href, light = true, newTab = false }) {
   if (!name && !avatar) return null;
-  return (
-    <span className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 backdrop-blur-sm ${light ? "bg-white/12 text-white" : "bg-black/5 text-ink"}`}>
+
+  const target = href || (username ? `/u/${username}` : null);
+  const base = `inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 backdrop-blur-sm ${light ? "bg-white/12 text-white" : "bg-black/5 text-ink"}`;
+
+  const inner = (
+    <>
       <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-white/20">
         {avatar
           ? <img src={avatar} alt="" className="h-full w-full object-cover" />
           : <span className="flex h-full w-full items-center justify-center text-xs font-bold">{(name || "?")[0]?.toUpperCase()}</span>}
       </span>
       <span className="max-w-[180px] truncate text-sm font-semibold">{name}</span>
-    </span>
+      {target && (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6"
+          strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-50" aria-hidden="true">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      )}
+    </>
+  );
+
+  if (!target) return <span className={base}>{inner}</span>;
+
+  return (
+    <Link
+      href={target}
+      {...(newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      title={`View ${name || "creator"}'s store`}
+      aria-label={`View ${name || "creator"}'s store`}
+      className={`${base} cursor-pointer transition-transform hover:scale-[1.03] hover:opacity-95`}
+    >
+      {inner}
+    </Link>
   );
 }

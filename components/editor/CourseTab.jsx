@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Field, RadioCard, SectionCard, Switch } from "@/components/ui";
-import { uid, uploadImage, uploadVideo, uploadSecureMedia } from "@/lib/courseModel";
+import { uid, uploadImage, uploadVideo, uploadSecureMedia, videoThumb } from "@/lib/courseModel";
 import { useAuth } from "@/components/AuthProvider";
 import MathFormulaToolbar from "@/components/editor/MathFormulaToolbar";
 import { LatexText } from "@/components/editor/LatexRenderer";
@@ -238,6 +238,43 @@ export default function CourseTab({ course, patch }) {
   );
 }
 
+/**
+ * Thumbnail for one video lesson. Shows what the learner will actually see:
+ * the uploaded cover, or the auto-derived YouTube/Vimeo still.
+ */
+function LessonCoverField({ lesson, onChange, userId }) {
+  const [busy, setBusy] = useState(false);
+  const auto = videoThumb(lesson.videoUrl);
+  const shown = lesson.coverImage || auto;
+
+  async function upload(file) {
+    if (!file) return;
+    setBusy(true);
+    try { onChange({ coverImage: await uploadImage(userId, file) }); }
+    catch (e) { alert("Upload failed: " + e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Field label="Cover image (optional)" hint="Shown before the video plays — 16:9 works best">
+      <div className="flex items-center gap-3">
+        <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-paper text-xs text-inkmuted">
+          {shown ? <img src={shown} alt="" className="h-full w-full object-cover" /> : "No cover"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <label className="btn-ghost cursor-pointer">
+            {busy ? "Uploading…" : lesson.coverImage ? "Replace" : "Upload cover"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+          </label>
+          {lesson.coverImage
+            ? <button type="button" onClick={() => onChange({ coverImage: "" })} className="ml-2 text-xs font-semibold text-danger">Remove</button>
+            : auto && <span className="ml-2 text-xs text-inkmuted">Using the video&rsquo;s own thumbnail</span>}
+        </div>
+      </div>
+    </Field>
+  );
+}
+
 /* ---------------- Per-type lesson body editors ---------------- */
 function LessonBody({ lesson, onChange, userId }) {
   const [videoUploading, setVideoUploading] = useState(false);
@@ -327,6 +364,13 @@ function LessonBody({ lesson, onChange, userId }) {
           {lesson.videoFile && <p className="mt-2 text-xs text-teal">✓ Video uploaded</p>}
         </Field>
         */}
+
+        {/* Cover image = the poster frame learners see before they hit play.
+            Left blank, the player falls back to the video's own thumbnail and
+            then to the course cover, so this is purely optional. */}
+        <div className="mt-3">
+          <LessonCoverField lesson={lesson} onChange={onChange} userId={userId} />
+        </div>
 
         <div className="mt-3">
           <Field label="Lesson notes (optional)">

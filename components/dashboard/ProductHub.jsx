@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { inr } from "@/lib/courseModel";
 import { PRODUCT_DEFAULTS, TYPE_META, productPrice } from "@/lib/products";
+import { netRupees, earningsBreakdown } from "@/lib/earnings";
 import { StatsHero, StatusTabs, RowMenu } from "@/components/dashboard/Hub";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -22,20 +23,28 @@ export default function ProductHub({ type, title, subtitle, ctaLabel }) {
   async function load() {
     const { data } = await supabase.from("mp_products").select("*").eq("owner_id", ownerId).eq("type", type).order("updated_at", { ascending: false });
     setRows(data || []);
-    const { data: p } = await supabase.from("mp_purchases").select("product_id, amount").eq("owner_id", ownerId).eq("product_type", type);
+    // creator_amount / commission_amount are what make the revenue column show
+    // the creator's payout instead of the buyer's gross.
+    const { data: p } = await supabase.from("mp_purchases")
+      .select("product_id, amount, creator_amount, commission_amount")
+      .eq("owner_id", ownerId).eq("product_type", type);
     setSales(p || []);
   }
   useEffect(() => { if (user) load(); }, [user]);
 
   const per = useMemo(() => {
     const m = {};
-    for (const p of sales) { m[p.product_id] = m[p.product_id] || { sales: 0, rev: 0 }; m[p.product_id].sales++; m[p.product_id].rev += (p.amount || 0) / 100; }
+    for (const p of sales) {
+      m[p.product_id] = m[p.product_id] || { sales: 0, rev: 0 };
+      m[p.product_id].sales++;
+      m[p.product_id].rev += netRupees(p);
+    }
     return m;
   }, [sales]);
   const totals = useMemo(() => {
-    const s = sales.length, rev = sales.reduce((a, p) => a + (p.amount || 0), 0) / 100;
+    const t = earningsBreakdown(sales);
     const views = rows.reduce((a, c) => a + (c.views || 0), 0);
-    return { s, rev, conv: views ? ((s / views) * 100).toFixed(1) + "%" : "0%" };
+    return { ...t, conv: views ? ((t.count / views) * 100).toFixed(1) + "%" : "0%" };
   }, [sales, rows]);
 
   const list = rows.filter((c) => c.status === tab).filter((c) => c.title.toLowerCase().includes(q.toLowerCase()));
@@ -63,7 +72,11 @@ export default function ProductHub({ type, title, subtitle, ctaLabel }) {
   return (
     <main onClick={() => setMenuFor(null)}>
       <StatsHero title={title} subtitle={subtitle} cta={ctaLabel} onCta={create}
-        stats={[["Total sales", totals.s], ["Total revenue", inr(totals.rev)], ["Conversion rate", totals.conv]]} />
+        stats={[
+          ["Total sales", totals.count],
+          ["Your earnings", inr(totals.net), `${inr(totals.gross)} gross − ${inr(totals.fee)} platform fee`],
+          ["Conversion rate", totals.conv]
+        ]} />
       <section className="px-4 py-6 sm:px-8 sm:py-8">
         <div className="flex flex-wrap items-center gap-3">
           <StatusTabs tabs={TABS} tab={tab} setTab={setTab} counts={counts} />
@@ -72,7 +85,7 @@ export default function ProductHub({ type, title, subtitle, ctaLabel }) {
         <div className="card mt-5">
           <div className="grid grid-cols-12 gap-4 border-b border-line px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-inkmuted">
             <div className="col-span-5">{TYPE_META[type].label}</div><div className="col-span-2">Price</div>
-            <div className="col-span-2">Sales</div><div className="col-span-2">Revenue</div><div className="col-span-1" />
+            <div className="col-span-2">Sales</div><div className="col-span-2">Your earnings</div><div className="col-span-1" />
           </div>
           {list.length === 0 && (
             <div className="px-5 py-14 text-center">

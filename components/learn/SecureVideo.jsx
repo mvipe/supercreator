@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/supabase";
+import { videoThumb } from "@/lib/courseModel";
 import VideoPlayer, { ytId } from "@/components/learn/VideoPlayer";
 
 // =============================================================
@@ -19,13 +20,18 @@ import VideoPlayer, { ytId } from "@/components/learn/VideoPlayer";
 
 const REFRESH_MS = 100 * 60 * 1000; // URL lives 2h; re-sign at 100 min
 
-export default function SecureVideo({ lesson, courseId, accent = "#2E6EF7", watermark }) {
+export default function SecureVideo({ lesson, courseId, accent = "#2E6EF7", watermark, cover }) {
   const [url, setUrl] = useState(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
   // A YouTube link needs no signing — play it straight away.
   const yt = ytId(lesson.videoUrl);
+
+  // Poster frame, so a lesson doesn't open on a black rectangle:
+  // the lesson's own thumbnail → the video's YouTube/Vimeo still →
+  // the course cover passed down by the player.
+  const poster = lesson.coverImage || lesson.thumbnail || videoThumb(lesson.videoUrl) || cover || undefined;
 
   const load = useCallback(async () => {
     if (yt) { setLoading(false); return; }
@@ -56,7 +62,12 @@ export default function SecureVideo({ lesson, courseId, accent = "#2E6EF7", wate
   }, [url, courseId, lesson.id, yt]);
 
   if (!yt && loading) {
-    return <div className="mt-4 flex aspect-video items-center justify-center rounded-2xl bg-black text-sm text-white/60">Loading video…</div>;
+    return (
+      <div className="relative mt-4 flex aspect-video items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/60">
+        {poster && <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover opacity-40" />}
+        <span className="relative">Loading video…</span>
+      </div>
+    );
   }
 
   if (!yt && err) {
@@ -77,6 +88,7 @@ export default function SecureVideo({ lesson, courseId, accent = "#2E6EF7", wate
       <VideoPlayer
         src={yt ? undefined : url}
         youtubeUrl={yt ? lesson.videoUrl : undefined}
+        poster={poster}
         watermark={watermark}
         accent={accent}
       />
