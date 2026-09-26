@@ -149,6 +149,38 @@ function FaqField({ d, patchData }) {
   );
 }
 
+/**
+ * Digital-product delivery links. A creator can add as many as they like
+ * (Google Drive, Dropbox, a direct URL…). Buyers see them right after paying.
+ * Stored on product.data.fileLinks as [{ label, url }].
+ */
+function FileLinksField({ d, patchData }) {
+  const list = d.fileLinks || [];
+  const set = (i, patch) => patchData({ fileLinks: list.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+  return (
+    <Field label="Files to deliver" hint="Add unlimited download links — buyers get them right after payment">
+      <div className="space-y-2">
+        {list.map((f, i) => (
+          <div key={i} className="space-y-2 rounded-lg border border-line p-3">
+            <div className="flex gap-2">
+              <input className="input" placeholder="File name (e.g. Chapter 1.pdf)" value={f.label || ""}
+                onChange={(e) => set(i, { label: e.target.value })} />
+              <button type="button" className="shrink-0 px-2 text-sm font-semibold text-danger"
+                onClick={() => patchData({ fileLinks: list.filter((_, j) => j !== i) })}>✕</button>
+            </div>
+            <input className="input" type="url" placeholder="https://drive.google.com/…  or any download link"
+              value={f.url || ""} onChange={(e) => set(i, { url: e.target.value })} />
+          </div>
+        ))}
+        <button type="button" className="btn-ghost" onClick={() => patchData({ fileLinks: [...list, { label: "", url: "" }] })}>
+          + Add file link
+        </button>
+        <p className="text-[11px] text-inkmuted">For Google Drive, set sharing to “Anyone with the link”.</p>
+      </div>
+    </Field>
+  );
+}
+
 /* ---------------- EVENT FORM ---------------- */
 export function EventForm({ product, patch, patchData }) {
   const d = product.data;
@@ -278,6 +310,9 @@ export function PaymentForm({ product, patch, patchData }) {
         <textarea className="input min-h-[130px]" value={d.description} onChange={(e) => patchData({ description: e.target.value })} />
       </Field>
       <HighlightsField d={d} patchData={patchData} label="What's included" />
+
+      {/* Digital-product delivery — unlimited download links. */}
+      <FileLinksField d={d} patchData={patchData} />
 
       <div className="flex gap-3">
         <RadioCard checked={d.priceMode === "fixed"} title="Fixed amount" onClick={() => patchData({ priceMode: "fixed" })} />

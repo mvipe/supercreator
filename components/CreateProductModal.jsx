@@ -13,11 +13,13 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const PRODUCTS = [
   {
-    id: "book",
-    title: "Sell Digital Files",
-    desc: "Sell e-books, PDFs, images, videos and more.",
-    href: "/dashboard/books",
-    emoji: "📁",
+    id: "digital",
+    title: "Sell Digital Product",
+    // Digital products are sold through a payment page — it collects the
+    // buyer's details and delivers the download links after payment.
+    desc: "Sell e-books, PDFs, images or any files — buyers get the download links after paying.",
+    href: "/dashboard/pages",
+    emoji: "📦",
     tint: "#FFF1E0"
   },
   {

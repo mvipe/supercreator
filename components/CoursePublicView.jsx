@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { inr, lessonCount, effectivePrice, ytEmbed } from "@/lib/courseModel";
+import { apiFetch } from "@/lib/supabase";
 import { BuiltWithLink, CreatorChip } from "@/components/Branding";
 import CopyLinkButton from "@/components/CopyLinkButton";
 import { INDIAN_STATES } from "@/lib/india";
@@ -30,9 +31,32 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
     state: "",
     gstin: "",
     addon: false,
+    coupon: "",
     pwyw: Math.max(course.pricing?.minPrice || 99, 99)
   });
   const setF = (patch) => setForm((f) => ({ ...f, ...patch }));
+
+  // Coupon codes — buyers can enter one at checkout, just like every other
+  // product. `quote` holds the discounted total returned by the server.
+  const [couponInput, setCouponInput] = useState("");
+  const [quote, setQuote] = useState(null);
+  const [couponMsg, setCouponMsg] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  async function applyCoupon() {
+    const code = couponInput.trim().toUpperCase();
+    if (!code || mode !== "live") return;
+    setCouponBusy(true); setCouponMsg("");
+    try {
+      const res = await apiFetch("/api/checkout/quote", {
+        productType: "course", productId: course.id, coupon: code,
+        pwywAmount: course.pricing?.mode === "pwyw" ? Number(form.pwyw) : null
+      });
+      if (res.couponError) { setQuote(null); setCouponMsg(res.couponError); setF({ coupon: "" }); }
+      else if (res.applied) { setQuote(res); setCouponMsg(`Coupon applied — you save ${inr(res.base - res.final)}!`); setF({ coupon: res.applied }); }
+      else { setQuote(null); setCouponMsg("This code doesn't apply here."); setF({ coupon: "" }); }
+    } catch (e) { setCouponMsg(e.message); }
+    finally { setCouponBusy(false); }
+  }
   const s = course.sections || {};
   const st = course.settings || {};
   const dark = st.theme === "dark";
@@ -77,7 +101,9 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
 
   /** The buy card + inline checkout. Rendered once for mobile and once for desktop. */
   function BuyCard() {
-    const base = isPwyw ? Number(form.pwyw) || 0 : price;
+    // A validated coupon overrides the course portion of the price; the add-on
+    // is never discounted, matching the server.
+    const base = quote?.applied ? Number(quote.final) || 0 : (isPwyw ? Number(form.pwyw) || 0 : price);
     const addonPrice = addon && form.addon ? Number(addon.price) || 0 : 0;
     const total = base + addonPrice;
     const preview = mode === "preview";
@@ -140,6 +166,23 @@ export default function CoursePublicView({ course, mode = "live", onBuy, onPrevi
             {isPwyw && (
               <input className={inputCls} style={inputStyle} type="number" min={course.pricing?.minPrice || 99}
                 value={form.pwyw} onChange={(e) => setF({ pwyw: e.target.value })} placeholder="Amount" />
+            )}
+
+            {/* Coupon code — enter and apply to see the discounted total. */}
+            {!isFree && (
+              <div>
+                <div className="flex gap-2">
+                  <input className={`${inputCls} uppercase`} style={inputStyle} placeholder="Discount code"
+                    value={couponInput}
+                    onChange={(e) => { setCouponInput(e.target.value); setQuote(null); setCouponMsg(""); setF({ coupon: "" }); }} />
+                  <button type="button" onClick={applyCoupon} disabled={preview || couponBusy || !couponInput.trim()}
+                    className="shrink-0 rounded-[10px] border px-4 text-sm font-semibold disabled:opacity-50"
+                    style={{ borderColor: border, color: accent }}>
+                    {couponBusy ? "…" : "Apply"}
+                  </button>
+                </div>
+                {couponMsg && <p className={`mt-1.5 text-xs font-semibold ${quote?.applied ? "text-teal" : "text-red-500"}`}>{couponMsg}</p>}
+              </div>
             )}
 
             {addon && (

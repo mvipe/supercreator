@@ -4,6 +4,7 @@ import { ytEmbed, inr } from "@/lib/courseModel";
 import { productPrice, productMrp } from "@/lib/products";
 import { BuiltWithLink, CreatorChip } from "@/components/Branding";
 import CopyLinkButton from "@/components/CopyLinkButton";
+import InlineCheckout from "@/components/products/InlineCheckout";
 
 // =============================================================
 // Public product pages (event / locked content / payment page / book).
@@ -183,8 +184,16 @@ function Faqs({ items = [], accent }) {
   );
 }
 
-/** The bordered purchase panel that ProductShell pins on desktop. */
-function BuyCard({ accent, mode, onBuy, label, priceNode, meta = [], note, owned, ownedNode }) {
+/**
+ * The bordered purchase panel that ProductShell pins on desktop.
+ *
+ * `checkout` is the inline checkout form (email / phone / GSTIN / state) — the
+ * same one the course page uses. When present the card shows the form right
+ * here (mobile AND desktop) instead of a button that opens a modal, so books
+ * and payment pages match courses. A plain `onBuy`/`label` button remains as a
+ * fallback.
+ */
+function BuyCard({ accent, mode, onBuy, label, priceNode, meta = [], note, owned, ownedNode, checkout }) {
   return (
     <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
       {meta.length > 0 && (
@@ -200,6 +209,8 @@ function BuyCard({ accent, mode, onBuy, label, priceNode, meta = [], note, owned
 
       {owned ? (
         <div className="mt-4">{ownedNode}</div>
+      ) : checkout ? (
+        <div className="mt-4">{checkout}</div>
       ) : (
         <button onClick={mode === "live" ? onBuy : undefined}
           className="mt-4 flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
@@ -208,7 +219,9 @@ function BuyCard({ accent, mode, onBuy, label, priceNode, meta = [], note, owned
         </button>
       )}
 
-      {note && <p className="mt-2 text-center text-[11px] text-inkmuted">{note}</p>}
+      {/* The inline form carries its own Razorpay note — only show this for the
+          owned / button states. */}
+      {note && (owned || !checkout) && <p className="mt-2 text-center text-[11px] text-inkmuted">{note}</p>}
 
       {mode === "live" && (
         <div className="mt-3">
@@ -218,6 +231,25 @@ function BuyCard({ accent, mode, onBuy, label, priceNode, meta = [], note, owned
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Buyer's downloadable files after a payment-page / digital-product purchase. */
+function DeliveredFiles({ links = [], accent }) {
+  const list = (links || []).filter((f) => f?.url);
+  if (!list.length) return null;
+  return (
+    <div className="mt-8">
+      <Label accent={accent}>Your downloads</Label>
+      <div className="mt-3 space-y-2">
+        {list.map((f, i) => (
+          <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-xl border border-line p-3.5 text-sm font-semibold hover:bg-paper">
+            📄 {f.label || `File ${i + 1}`} <span className="ml-auto" style={{ color: accent }}>Download ↓</span>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -304,16 +336,27 @@ export function LockedView({ product, mode = "live", onBuy, unlocked = false }) 
  * page: cover media, clickable creator chip, description, highlights, FAQs
  * and a sticky buy card with a working "copy link" button.
  */
-export function PaymentView({ product, mode = "live", onBuy, creator = null, inlineCheckout = null }) {
+export function PaymentView({ product, mode = "live", onBuy, creator = null, user = null, onPaid, paid = false }) {
   const d = product.data || {};
   const accent = d.accent || "#2E6EF7";
   const isPwyw = d.priceMode === "pwyw";
   const price = isPwyw ? Number(d.minPrice) || 0 : productPrice("payment", d);
   const mrp = productMrp("payment", d);
 
+  // Inline checkout form — same as the course page. Shown right in the card on
+  // mobile and desktop instead of a modal.
+  const checkout = (
+    <InlineCheckout
+      productType="payment" productId={product.id} title={product.title}
+      accent={accent} mode={mode} user={user} onSuccess={onPaid}
+      price={{ isFree: false, isPwyw, min: Number(d.minPrice) || 0, label: inr(price) }}
+      buttonLabel={d.buttonText || "Pay now"} allowCoupon
+    />
+  );
+
   const buyCard = (
     <BuyCard
-      accent={accent} mode={mode} onBuy={onBuy}
+      accent={accent} mode={mode} onBuy={onBuy} checkout={checkout}
       label={d.buttonText || "Pay now"}
       priceNode={isPwyw
         ? <><span>{inr(price)}</span><span className="text-sm font-semibold text-inkmuted">or more</span></>
@@ -322,7 +365,6 @@ export function PaymentView({ product, mode = "live", onBuy, creator = null, inl
         [isPwyw ? "🤝" : "💳", isPwyw ? "Pay what you want" : "One-time payment"],
         ["🔒", "Secure payment via Razorpay"]
       ]}
-      note="No account needed — a receipt is emailed to you."
     />
   );
 
@@ -332,13 +374,14 @@ export function PaymentView({ product, mode = "live", onBuy, creator = null, inl
       title={product.title} subtitle={d.subtitle}
       cover={<Cover images={d.coverImages} video={d.coverVideo} />}
       buyCard={buyCard}
-      mobileBuyCard={inlineCheckout}
     >
       <div className="mt-8">
         <Label accent={accent}>About the page</Label>
         <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">{d.description}</p>
       </div>
       <Highlights items={d.highlights} accent={accent} />
+      {/* Delivered downloads appear once the buyer has paid. */}
+      {paid && <DeliveredFiles links={d.fileLinks} accent={accent} />}
       <Faqs items={d.faqs} accent={accent} />
     </ProductShell>
   );
@@ -355,7 +398,7 @@ function InfoCard({ label, value }) {
 
 /* ---------------- BOOK / E-BOOK ---------------- */
 /** Same frame as a course page — the ebook just swaps the cover for the book art. */
-export function BookView({ product, mode = "live", onBuy, owned = false, creator = null, inlineCheckout = null }) {
+export function BookView({ product, mode = "live", onBuy, owned = false, creator = null, user = null, onPaid }) {
   const d = product.data || {};
   const accent = d.accent || "#2E6EF7";
   const isPwyw = d.priceMode === "pwyw";
@@ -390,9 +433,20 @@ export function BookView({ product, mode = "live", onBuy, owned = false, creator
     </div>
   );
 
+  // Inline checkout form (like the course page). Skipped once owned, where the
+  // download link takes its place.
+  const checkout = owned ? null : (
+    <InlineCheckout
+      productType="book" productId={product.id} title={product.title}
+      accent={accent} mode={mode} user={user} onSuccess={onPaid}
+      price={{ isFree, isPwyw, min: Number(d.minPrice) || 0, label: inr(price) }}
+      buttonLabel={d.buttonText || "Buy & download"} allowCoupon
+    />
+  );
+
   const buyCard = (
     <BuyCard
-      accent={accent} mode={mode} onBuy={onBuy} owned={owned} ownedNode={ownedNode}
+      accent={accent} mode={mode} onBuy={onBuy} owned={owned} ownedNode={ownedNode} checkout={checkout}
       label={d.buttonText || "Buy & download"}
       priceNode={isFree
         ? <span>Free</span>
@@ -415,7 +469,6 @@ export function BookView({ product, mode = "live", onBuy, owned = false, creator
       subtitle={d.subtitle || (d.author ? `by ${d.author}` : "")}
       cover={cover}
       buyCard={buyCard}
-      mobileBuyCard={inlineCheckout}
     >
       <div className="mt-4 flex flex-wrap gap-2 text-xs">
         {d.pages > 0 && <span className="pill bg-paper text-inkmuted">{d.pages} pages</span>}

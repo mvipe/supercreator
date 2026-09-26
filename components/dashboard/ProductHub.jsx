@@ -11,7 +11,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 const TABS = ["published", "unpublished", "draft"];
 
-export default function ProductHub({ type, title, subtitle, ctaLabel }) {
+export default function ProductHub({ type, title, subtitle, ctaLabel, onCta }) {
   const { user, ownerId } = useAuth();
   const r = useRouter();
   const [rows, setRows] = useState([]);
@@ -71,7 +71,7 @@ export default function ProductHub({ type, title, subtitle, ctaLabel }) {
 
   return (
     <main onClick={() => setMenuFor(null)}>
-      <StatsHero title={title} subtitle={subtitle} cta={ctaLabel} onCta={create}
+      <StatsHero title={title} subtitle={subtitle} cta={ctaLabel} onCta={onCta || create}
         stats={[
           ["Total sales", totals.count],
           ["Your earnings", inr(totals.net), `${inr(totals.gross)} gross − ${inr(totals.fee)} platform fee`],

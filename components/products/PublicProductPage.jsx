@@ -8,6 +8,18 @@ import CheckoutModal from "@/components/CheckoutModal";
 import VisitTracker from "@/components/VisitTracker";
 import { TYPE_META, productPrice } from "@/lib/products";
 
+// A browser-local record that "this device already paid for this product".
+// It's what stops a mobile buyer being asked to pay again after a refresh
+// while the Razorpay redirect is still settling, and it makes the download
+// appear immediately on mobile (where the in-page owned re-check can lag).
+const paidKey = (type, id) => `sc_paid:${type}:${id}`;
+function readPaid(type, id) {
+  try { return localStorage.getItem(paidKey(type, id)) === "1"; } catch { return false; }
+}
+function writePaid(type, id) {
+  try { localStorage.setItem(paidKey(type, id), "1"); } catch { /* private mode — non-fatal */ }
+}
+
 export default function PublicProductPage({ type, View }) {
   const { slug } = useParams();
   const r = useRouter();
@@ -27,8 +39,14 @@ export default function PublicProductPage({ type, View }) {
         setProduct(data); setState("ready");
         supabase.rpc("mp_increment_views", { p_table: "product", p_id: data.id }).then(() => {});
 
-        // Whose page is this? Drives the clickable creator chip in the header,
-        // exactly like the course page.
+        // Restore a purchase this device already made, so a refresh keeps the
+        // download visible and never re-charges (the mobile bug).
+        if (readPaid(type, data.id)) {
+          if (type !== "payment") setOwned(true);
+          setJustPaid(true);
+        }
+
+        // Whose page is this? Drives the clickable creator chip in the header.
         const { data: prof } = await supabase.from("mp_profiles")
           .select("display_name, full_name, business_name, avatar_url, username")
           .eq("user_id", data.owner_id).maybeSingle();
@@ -45,7 +63,7 @@ export default function PublicProductPage({ type, View }) {
   useEffect(() => {
     if (!user || !product || type === "payment") return;
     supabase.from("mp_purchases").select("id").eq("product_type", type).eq("product_id", product.id).eq("buyer_id", user.id).maybeSingle()
-      .then(({ data }) => setOwned(!!data));
+      .then(({ data }) => { if (data) setOwned(true); });
   }, [user, product, type]);
 
   if (state === "loading") return <div className="flex min-h-screen items-center justify-center text-inkmuted">Loading…</div>;
@@ -58,33 +76,29 @@ export default function PublicProductPage({ type, View }) {
 
   const d = product.data || {};
 
+  // Event & locked still use the modal; book & payment render the form inline.
   function onBuy() {
-    // No login wall — guests can buy with email + phone + state, just like the
-    // course checkout. Owners of a one-time product don't re-buy.
     if (owned && type !== "payment") return;
     setCheckout(true);
   }
 
-  // Label shows the effective (discounted) price; the server still recomputes.
+  // Called by the inline checkout (book/payment) on a successful payment.
+  function onPaid() {
+    writePaid(type, product.id);
+    if (type !== "payment") setOwned(true);
+    setJustPaid(true);
+    window.scrollTo(0, 0);
+  }
+
   const eff = productPrice(type, d);
   const priceInfo =
     type === "event" ? { isFree: d.priceMode === "free", label: inr(eff) } :
     type === "locked" ? { label: inr(eff) } :
-    type === "book" ? { isPwyw: d.priceMode === "pwyw", min: d.minPrice, label: inr(eff) } :
     { isPwyw: d.priceMode === "pwyw", min: d.minPrice, label: inr(eff) };
 
   const unlocked = type === "locked" && owned;
   const showEventAccess = type === "event" && owned;
-  const inlineCheckout = (type === "book" || type === "payment") ? (
-    <CheckoutModal
-      inline productType={type} productId={product.id} title={product.title} accent={d.accent}
-      price={priceInfo} user={user} allowCoupon={!priceInfo.isFree}
-      meta={type === "book"
-        ? [["📦", `${d.format || "PDF"} download`], ["♾️", "Lifetime access"]]
-        : [["💳", "One-time payment"], ["🔒", "Secure payment via Razorpay"]]}
-      onSuccess={() => { setOwned(true); setJustPaid(true); window.scrollTo(0, 0); }}
-    />
-  ) : null;
+  const paid = justPaid || owned; // payment pages: show delivered files once paid
 
   return (
     <>
@@ -93,25 +107,28 @@ export default function PublicProductPage({ type, View }) {
       {(owned || justPaid) && type !== "payment" && type !== "book" && (
         <div className="sticky top-0 z-40 bg-teal px-4 py-2 text-center text-sm font-semibold text-white">
           {type === "event"
-            ? <>You're registered! {d.mode === "online" && d.joinLink ? <a href={d.joinLink} target="_blank" className="underline">Join link →</a> : d.mode === "offline" ? `Venue: ${d.venue}` : "Details below."}</>
-            : "Unlocked — this content is yours."}
+            ? <>You're registered! {d.mode === "online" && d.joinLink ? <a href={d.joinLink} target="_blank" className="underline">Join link &rarr;</a> : d.mode === "offline" ? `Venue: ${d.venue}` : "Details below."}</>
+            : "Unlocked &mdash; this content is yours."}
         </div>
       )}
       {(owned || justPaid) && type === "book" && (
-        <div className="sticky top-0 z-40 bg-teal px-4 py-2 text-center text-sm font-semibold text-white">Purchased — download your book below.</div>
+        <div className="sticky top-0 z-40 bg-teal px-4 py-2 text-center text-sm font-semibold text-white">Purchased &mdash; download your book below.</div>
       )}
       {justPaid && type === "payment" && (
         <div className="sticky top-0 z-40 bg-teal px-4 py-2 text-center text-sm font-semibold text-white">
           {d.successMessage || "Payment received. Thank you!"}
         </div>
       )}
+      {/* Book & payment: the form is inline (user + onPaid). Event & locked keep
+          the modal, opened by onBuy. */}
       <View product={product} mode="live" onBuy={onBuy} unlocked={unlocked} owned={owned}
-        registered={showEventAccess} creator={creator} inlineCheckout={inlineCheckout} />
+        registered={showEventAccess} creator={creator}
+        user={user} onPaid={onPaid} paid={paid} />
       {checkout && (
         <CheckoutModal productType={type} productId={product.id} title={product.title} accent={d.accent}
           price={priceInfo} user={user} allowCoupon={!priceInfo.isFree}
           onClose={() => setCheckout(false)}
-          onSuccess={() => { setCheckout(false); setOwned(true); setJustPaid(true); window.scrollTo(0, 0); }} />
+          onSuccess={() => { setCheckout(false); writePaid(type, product.id); setOwned(true); setJustPaid(true); window.scrollTo(0, 0); }} />
       )}
     </>
   );
