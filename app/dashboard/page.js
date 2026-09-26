@@ -6,7 +6,6 @@ import { useAuth } from "@/components/AuthProvider";
 import CompleteProfileModal from "@/components/CompleteProfileModal";
 import NotificationCenter from "@/components/NotificationCenter";
 import CreateProductModal from "@/components/CreateProductModal";
-import SellDigitalModal from "@/components/SellDigitalModal";
 import { fetchMe } from "@/lib/plan";
 import { inr } from "@/lib/courseModel";
 import { BRAND } from "@/lib/brand";
@@ -114,10 +113,8 @@ export default function GettingStarted() {
   const [showProfile, setShowProfile] = useState(false);
   const [profileDone, setProfileDone] = useState(true);
   const [bannerOpen, setBannerOpen] = useState(true);
-  // "Create a product" → the six-type picker; "Sell Digital Products" → the
-  // three-way digital/multiple/existing chooser.
+  // "Create a product" → the six-type picker.
   const [showCreate, setShowCreate] = useState(false);
-  const [showSell, setShowSell] = useState(false);
   const rangeRef = useRef(null);
 
   const loadPlan = useCallback(async () => setMe(await fetchMe()), []);
@@ -134,12 +131,41 @@ export default function GettingStarted() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Stats are refetched whenever the range filter changes.
-  useEffect(() => {
+  // Load the overview stats. `quiet` keeps the current numbers on screen while
+  // refreshing so a live update doesn't flash the cards back to skeletons.
+  const loadStats = useCallback(async (quiet = false) => {
     if (!user) return;
-    setStats(null);
-    apiFetch(`/api/dashboard/stats?range=${range}`, undefined, "GET").then(setStats).catch(() => {});
+    if (!quiet) setStats(null);
+    try {
+      const s = await apiFetch(`/api/dashboard/stats?range=${range}&t=${Date.now()}`, undefined, "GET");
+      setStats(s);
+    } catch { /* keep whatever we had */ }
   }, [user, range]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  // Real-time overview: the numbers used to update only on a full reload, so a
+  // fresh sale or visit could take hours to show. Now they refresh the moment
+  // a row lands (Supabase realtime), whenever the tab regains focus, and on a
+  // 30-second safety poll.
+  useEffect(() => {
+    if (!user || !ownerId) return;
+    const refresh = () => loadStats(true);
+    const timer = setInterval(refresh, 30000);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const channel = supabase
+      .channel(`dash-${ownerId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mp_purchases", filter: `owner_id=eq.${ownerId}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mp_bookings", filter: `owner_id=eq.${ownerId}` }, refresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mp_visits", filter: `owner_id=eq.${ownerId}` }, refresh)
+      .subscribe();
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      supabase.removeChannel(channel);
+    };
+  }, [user, ownerId, loadStats]);
 
   // Close the range dropdown on an outside click.
   useEffect(() => {
@@ -285,9 +311,7 @@ export default function GettingStarted() {
               <h2 className="text-lg font-bold tracking-tight text-[#11162c]">How Top Creators are using {BRAND.name}</h2>
               <div className="mt-2 h-[3px] w-6 bg-[#7d55f5]" />
               <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                {/* This one opens a chooser instead of jumping straight to the
-                    Books hub — digital sellers land on three different flows. */}
-                <FeatureCard tone="purple" onClick={() => setShowSell(true)} art={<ArtProducts />} title="Sell Digital Products" desc="Sell videos, photos, documents and more in seconds." />
+                <FeatureCard tone="purple" href="/dashboard/pages" art={<ArtProducts />} title="Sell Digital Products" desc="Sell videos, photos, documents and more in seconds." />
                 <FeatureCard tone="blue" href="/dashboard/bookings" art={<ArtSessions />} title="Offer 1:1 Sessions" desc="Launch personal coaching in a fraction of minutes." />
                 <FeatureCard tone="green" href="/dashboard/courses" art={<ArtCourse />} title="Launch a Course" desc="Create full-length courses with lots of customisation." />
               </div>
@@ -358,7 +382,6 @@ export default function GettingStarted() {
         <CompleteProfileModal onClose={() => setShowProfile(false)} onSaved={() => { setShowProfile(false); refresh(); }} />
       )}
       <CreateProductModal open={showCreate} onClose={() => setShowCreate(false)} />
-      <SellDigitalModal open={showSell} onClose={() => setShowSell(false)} />
     </main>
   );
 }

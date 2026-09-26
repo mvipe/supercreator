@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -19,40 +19,61 @@ export default function StorePublic() {
   const [state, setState] = useState("loading");
   const [warned, setWarned] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data: p } = await supabase.from("mp_profiles").select("*").eq("username", username).maybeSingle();
-      if (!p || p.blocked) { setState("missing"); return; }
-      setProfile(p);
-      if (p.meta_title) document.title = p.meta_title;
-      const [{ data: courses }, { data: products }, { data: sessions }] = await Promise.all([
-        supabase.from("mp_courses").select("id,title,slug,cover_images,pricing").eq("owner_id", p.user_id).eq("status", "published"),
-        supabase.from("mp_products").select("id,type,title,slug,data").eq("owner_id", p.user_id).eq("status", "published"),
-        supabase.from("mp_sessions").select("id").eq("owner_id", p.user_id).eq("active", true)
-      ]);
-      const list = [
-        ...(courses || []).map((c) => {
-          const pr = c.pricing || {};
-          const free = pr.mode === "free";
-          const hasDisc = pr.discountEnabled && Number(pr.discountPrice) > 0 && Number(pr.discountPrice) < Number(pr.price);
-          return {
-            type: "course", title: c.title, slug: c.slug, img: c.cover_images?.[0],
-            price: free ? 0 : (hasDisc ? Number(pr.discountPrice) : (Number(pr.price) || 0)),
-            mrp: !free && hasDisc ? Number(pr.price) : 0
-          };
-        }),
-        ...(products || []).map((x) => {
-          const d = x.data || {};
-          const price = productPrice(x.type, d);
-          // course-style discount: original price struck-through when a discount is on
-          const mrp = productMrp(x.type, d);
-          return { type: x.type, title: x.title, slug: x.slug, img: d.coverImages?.[0], price, mrp };
-        })
-      ];
-      setItems(list); setHasSessions((sessions || []).length > 0);
-      setState("ready");
-    })();
+  // `quiet` re-reads the storefront without flashing the loading state — used
+  // by the live subscription below.
+  const load = useCallback(async (quiet = false) => {
+    const { data: p } = await supabase.from("mp_profiles").select("*").eq("username", username).maybeSingle();
+    if (!p || p.blocked) { if (!quiet) setState("missing"); return; }
+    setProfile(p);
+    if (p.meta_title) document.title = p.meta_title;
+    const [{ data: courses }, { data: products }, { data: sessions }] = await Promise.all([
+      supabase.from("mp_courses").select("id,title,slug,cover_images,pricing").eq("owner_id", p.user_id).eq("status", "published"),
+      supabase.from("mp_products").select("id,type,title,slug,data").eq("owner_id", p.user_id).eq("status", "published"),
+      supabase.from("mp_sessions").select("id").eq("owner_id", p.user_id).eq("active", true)
+    ]);
+    const list = [
+      ...(courses || []).map((c) => {
+        const pr = c.pricing || {};
+        const free = pr.mode === "free";
+        const hasDisc = pr.discountEnabled && Number(pr.discountPrice) > 0 && Number(pr.discountPrice) < Number(pr.price);
+        return {
+          type: "course", title: c.title, slug: c.slug, img: c.cover_images?.[0],
+          price: free ? 0 : (hasDisc ? Number(pr.discountPrice) : (Number(pr.price) || 0)),
+          mrp: !free && hasDisc ? Number(pr.price) : 0
+        };
+      }),
+      ...(products || []).map((x) => {
+        const d = x.data || {};
+        const price = productPrice(x.type, d);
+        // course-style discount: original price struck-through when a discount is on
+        const mrp = productMrp(x.type, d);
+        return { type: x.type, title: x.title, slug: x.slug, img: d.coverImages?.[0], price, mrp };
+      })
+    ];
+    setItems(list); setHasSessions((sessions || []).length > 0);
+    setState("ready");
+    return p.user_id;
   }, [username]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Keep the storefront fresh: a course/product published (or unpublished) by
+  // the creator shows up here immediately instead of after a long cache delay,
+  // and we re-read whenever the tab regains focus. Subscribed per owner once
+  // the profile is known.
+  useEffect(() => {
+    const ownerId = profile?.user_id;
+    if (!ownerId) return;
+    const refresh = () => load(true);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const channel = supabase
+      .channel(`store-${ownerId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mp_courses", filter: `owner_id=eq.${ownerId}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mp_products", filter: `owner_id=eq.${ownerId}` }, refresh)
+      .subscribe();
+    return () => { window.removeEventListener("focus", onFocus); supabase.removeChannel(channel); };
+  }, [profile?.user_id, load]);
 
   if (state === "loading") return <div className="flex min-h-screen items-center justify-center text-inkmuted">Loading…</div>;
   if (state === "missing") return <div className="flex min-h-screen items-center justify-center text-inkmuted">This store doesn't exist.</div>;

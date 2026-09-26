@@ -114,6 +114,8 @@ export default function PublicCoursePage() {
         productId: course.id,
         email: form.email, phone: form.phone, state: form.state, gstin: form.gstin,
         addon: !!form.addon,
+        // Coupon the buyer applied in the checkout form; the server re-validates.
+        coupon: form.coupon ? String(form.coupon).trim().toUpperCase() : null,
         pwywAmount: isPwyw ? Number(form.pwyw) : null
       };
       const res = await apiFetch("/api/checkout/guest-order", payload);

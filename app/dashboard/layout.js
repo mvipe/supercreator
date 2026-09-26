@@ -279,7 +279,10 @@ export default function DashLayout({ children }) {
           </div>
         </div>
       </aside>
-      <div className="h-screen min-w-0 flex-1 overflow-y-auto" style={{ backgroundColor: "#fbfcff", backgroundImage: "radial-gradient(circle at 82% 0%, #eff0ff 0%, transparent 32%)" }}>
+      {/* pb-24 on mobile keeps the last rows of any page (Learn, tutorials,
+          long lists) above the fixed bottom nav — without it the bottom
+          content sat behind the nav and looked un-scrollable. */}
+      <div className="h-screen min-w-0 flex-1 overflow-y-auto pb-24 md:pb-0" style={{ backgroundColor: "#fbfcff", backgroundImage: "radial-gradient(circle at 82% 0%, #eff0ff 0%, transparent 32%)" }}>
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-line bg-white px-4 py-3 md:hidden">
           <button
             aria-label="Open sidebar"

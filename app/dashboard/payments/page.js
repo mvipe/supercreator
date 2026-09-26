@@ -421,7 +421,7 @@ function KycPanel() {
         <Field label="PAN" required><input className="input uppercase" disabled={locked} placeholder="ABCDE1234F" value={k.pan || ""} onChange={(e) => set({ pan: e.target.value })} /></Field>
         <Field label="GST (optional)"><input className="input uppercase" disabled={locked} value={k.gst || ""} onChange={(e) => set({ gst: e.target.value })} /></Field>
       </div>
-      <Field label="Bank account holder name"><input className="input" disabled={locked} value={k.bank_holder || ""} onChange={(e) => set({ bank_holder: e.target.value })} /></Field>
+      <Field label="Bank account holder"><input className="input" disabled={locked} value={k.bank_holder || ""} onChange={(e) => set({ bank_holder: e.target.value })} /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Bank account number" required><input className="input" disabled={locked} value={k.bank_account || ""} onChange={(e) => set({ bank_account: e.target.value })} /></Field>
         <Field label="IFSC" required><input className="input uppercase" disabled={locked} value={k.ifsc || ""} onChange={(e) => set({ ifsc: e.target.value })} /></Field>
