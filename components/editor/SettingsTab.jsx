@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Field, RadioCard, SectionCard, Switch } from "@/components/ui";
 import { slugify, uid } from "@/lib/courseModel";
+import { cleanPixelId } from "@/lib/metaPixel";
 
 const THEMES = [
   { id: "default", label: "Default", desc: "Warm paper, ink text" },
@@ -187,7 +188,17 @@ export default function SettingsTab({ course, patch }) {
         <h2 className="font-display text-xl font-bold">Tracking</h2>
         <div className="mt-4 space-y-4">
           <Field label="Meta Pixel ID" hint="Run re-marketing campaigns on Meta Business">
-            <input className="input" placeholder="123456789012345" value={st.metaPixelId} onChange={(e) => set({ metaPixelId: e.target.value })} />
+            <input className="input" inputMode="numeric" placeholder="123456789012345" value={st.metaPixelId || ""}
+              onChange={(e) => set({ metaPixelId: e.target.value })}
+              // Pasting the whole Meta snippet (or an ID with spaces) is fine —
+              // we keep just the numeric ID.
+              onBlur={(e) => { const id = cleanPixelId(e.target.value); if (id !== (st.metaPixelId || "")) set({ metaPixelId: id }); }} />
+            {st.metaPixelId && !cleanPixelId(st.metaPixelId) && (
+              <p className="mt-1 text-xs font-semibold text-red-500">That doesn't look like a Pixel ID. Copy the number from Meta Events Manager → Data sources.</p>
+            )}
+            {cleanPixelId(st.metaPixelId) && (
+              <p className="mt-1 text-xs text-inkmuted">Tracks PageView, ViewContent, InitiateCheckout, AddPaymentInfo, Purchase (and CompleteRegistration for free courses). Publish/save, then test with Meta Pixel Helper.</p>
+            )}
           </Field>
           <Field label="Google Analytics ID" hint="Visitor-level data on your GA dashboard">
             <input className="input" placeholder="G-XXXXXXXXXX" value={st.gaId} onChange={(e) => set({ gaId: e.target.value })} />
