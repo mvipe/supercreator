@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Script from "next/script";
 import { supabase, apiFetch } from "@/lib/supabase";
-import { fromRow } from "@/lib/courseModel";
+import { fromRow, effectivePrice } from "@/lib/courseModel";
+import { initPixel, track, courseParams } from "@/lib/metaPixel";
 import { productPrice, productMrp } from "@/lib/products";
 import { useAuth } from "@/components/AuthProvider";
 import CoursePublicView from "@/components/CoursePublicView";
@@ -33,6 +34,8 @@ export default function PublicCoursePage() {
   const [addon, setAddon] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const pixelRef = useRef(""); // this course's clean Meta Pixel ID ("" = none)
+  const viewedRef = useRef(null);
 
   useEffect(() => {
     supabase.from("mp_courses").select("*").eq("slug", slug).eq("status", "published").maybeSingle()
@@ -87,6 +90,18 @@ export default function PublicCoursePage() {
       .then(({ data }) => setOwned(!!data));
   }, [user, course]);
 
+  // Meta Pixel: PageView + ViewContent once per course load. Runs in an effect
+  // (not next/script) so it also fires on client-side navigation between pages.
+  useEffect(() => {
+    if (!course) return;
+    const id = initPixel(course.settings?.metaPixelId);
+    pixelRef.current = id;
+    if (!id || viewedRef.current === course.id) return; // StrictMode double-run guard
+    viewedRef.current = course.id;
+    track(id, "PageView");
+    track(id, "ViewContent", courseParams(course, effectivePrice(course)));
+  }, [course]);
+
   if (state === "loading") return <div className="flex min-h-screen items-center justify-center text-inkmuted">Loading…</div>;
   if (state === "missing") return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-4 text-center">
@@ -108,8 +123,14 @@ export default function PublicCoursePage() {
   async function onBuy(form) {
     if (owned || !form) { r.push(`/learn/${slug}`); return; }
     setError(""); setBusy(true);
+    const pixel = pixelRef.current;
     try {
       const isPwyw = course.pricing?.mode === "pwyw";
+      // Estimated checkout value (coupon is applied server-side; Purchase below
+      // reports the exact amount charged).
+      const estValue = (isPwyw ? Number(form.pwyw) || 0 : effectivePrice(course))
+        + (addon && form.addon ? Number(addon.price) || 0 : 0);
+      track(pixel, "InitiateCheckout", { ...courseParams(course, estValue), num_items: addon && form.addon ? 2 : 1 });
       const payload = {
         productId: course.id,
         email: form.email, phone: form.phone, state: form.state, gstin: form.gstin,
@@ -121,6 +142,7 @@ export default function PublicCoursePage() {
       const res = await apiFetch("/api/checkout/guest-order", payload);
 
       if (res.free) {
+        track(pixel, "CompleteRegistration", { ...courseParams(course, 0), status: "free_enrollment" });
         await signInGuest(res.tokenHash);
         r.push(`/learn/${slug}?welcome=1`);
         return;
@@ -128,6 +150,7 @@ export default function PublicCoursePage() {
 
       const ok = await loadRazorpay();
       if (!ok) throw new Error("Could not load Razorpay. Check your connection.");
+      track(pixel, "AddPaymentInfo", courseParams(course, (Number(res.amount) || 0) / 100));
       const rzp = new window.Razorpay({
         key: res.keyId, order_id: res.orderId, amount: res.amount, currency: "INR",
         name: course.title, description: "SuperCreators checkout",
@@ -136,6 +159,10 @@ export default function PublicCoursePage() {
         handler: async (resp) => {
           try {
             const v = await apiFetch("/api/checkout/guest-verify", resp);
+            // Exact amount charged (paise -> ₹). eventID = payment id so Meta
+            // de-duplicates if a Conversions API event is ever added.
+            track(pixel, "Purchase", { ...courseParams(course, (Number(res.amount) || 0) / 100), num_items: addon && form.addon ? 2 : 1 },
+              resp.razorpay_payment_id || res.orderId);
             await signInGuest(v.tokenHash);
             r.push(`/learn/${slug}?welcome=1`);
           } catch (ex) { setError(ex.message); setBusy(false); }
@@ -156,9 +183,6 @@ export default function PublicCoursePage() {
           <Script src={`https://www.googletagmanager.com/gtag/js?id=${st.gaId}`} strategy="afterInteractive" />
           <Script id="ga" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${st.gaId}');`}</Script>
         </>
-      )}
-      {st.metaPixelId && (
-        <Script id="fbp" strategy="afterInteractive">{`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${st.metaPixelId}');fbq('track','PageView');`}</Script>
       )}
 
       {owned && (
