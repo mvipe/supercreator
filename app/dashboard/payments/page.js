@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, apiFetch } from "@/lib/supabase";
 import { inr, uploadImage } from "@/lib/courseModel";
+import LinkAdd from "@/components/LinkAdd";
+import { isDriveUrl } from "@/lib/driveLink";
 import { TYPE_META } from "@/lib/products";
 import { Field } from "@/components/ui";
 import { useAuth } from "@/components/AuthProvider";
@@ -433,7 +435,7 @@ function KycPanel() {
         <div className="flex items-center gap-3">
           <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-paper text-2xl">
             {k.doc_url
-              ? (/\.pdf($|\?)/i.test(k.doc_url)
+              ? (/\.pdf($|\?)/i.test(k.doc_url) || isDriveUrl(k.doc_url)
                   ? <span title="PDF document">📄</span>
                   : <img src={k.doc_url} alt="" className="h-full w-full object-cover" />)
               : <span className="text-xs text-inkmuted">None</span>}
@@ -446,10 +448,13 @@ function KycPanel() {
               </div>
             )}
             {!locked && (
-              <label className="btn-ghost cursor-pointer">
-                {uploading ? "Uploading…" : k.doc_url ? "Replace document" : "Upload document"}
-                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => onDoc(e.target.files)} />
-              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="btn-ghost cursor-pointer">
+                  {uploading ? "Uploading…" : k.doc_url ? "Replace document" : "Upload document"}
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => onDoc(e.target.files)} />
+                </label>
+                <LinkAdd kind="file" label="🔗 Drive link" buttonClassName="btn-ghost" onAdd={(url) => set({ doc_url: url })} />
+              </div>
             )}
             {k.doc_url && !locked && (
               <p className="mt-1 text-[11px] text-inkmuted">Saved with this form — press “Submit for verification” to send it.</p>

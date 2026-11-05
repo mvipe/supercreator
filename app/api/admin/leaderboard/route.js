@@ -5,7 +5,15 @@ import { netPaise } from "@/lib/earnings";
 export const dynamic = "force-dynamic";
 
 // Creator earnings leaderboard for a chosen window. Super-admins only.
-// range: today | yesterday | 7d | month | year | custom (+ from/to)
+// range: today | yesterday | 7d | this_month | month | year | custom (+ from/to)
+
+// "This month" is a calendar month in India time — the 1st, 00:00 IST, until
+// now — regardless of the server's own timezone (Vercel runs in UTC).
+const IST_OFFSET_MS = 330 * 60000;
+function startOfMonthIST() {
+  const ist = new Date(Date.now() + IST_OFFSET_MS);
+  return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), 1) - IST_OFFSET_MS);
+}
 
 function windowFor(range, fromP, toP) {
   if (range === "yesterday") {
@@ -13,6 +21,7 @@ function windowFor(range, fromP, toP) {
     const e = new Date(s); e.setDate(e.getDate() + 1);
     return { from: s, to: e };
   }
+  if (range === "this_month") return { from: startOfMonthIST(), to: new Date() };
   if (range === "custom") {
     const s = fromP ? new Date(fromP) : new Date(Date.now() - 30 * 86400000);
     const e = toP ? new Date(toP) : new Date();

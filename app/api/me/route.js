@@ -82,6 +82,14 @@ export async function GET(req) {
 
   // Platform staff (super admins and promoted sub-admins) always get Pro
   // features regardless of what their own plan row says.
+  // Refer & Earn on/off (admin-controlled). Defaults to on if the table
+  // hasn't been migrated, so the menu doesn't vanish unexpectedly.
+  let referralsEnabled = true;
+  try {
+    const { data: rs, error: rsErr } = await supabaseAdmin.from("mp_referral_settings").select("enabled").eq("id", 1).maybeSingle();
+    if (!rsErr && rs) referralsEnabled = rs.enabled !== false;
+  } catch { /* not migrated */ }
+
   const staffPro = staff || superAdmin || !!prof?.is_admin || !!prof?.is_super_admin;
   const isPro = staffPro || isProProfile(planProfile);
 
@@ -104,6 +112,7 @@ export async function GET(req) {
     // Lets the dashboard show payout state without a second round-trip.
     payoutReady: !!prof?.payout_method?.type,
     kycStatus: prof?.kyc_status || "not_started",
+    referralsEnabled,
     // Surfaced so a missing migration is visible instead of silently
     // downgrading everyone to "free".
     ...(degraded ? { degraded: true, warning } : {})

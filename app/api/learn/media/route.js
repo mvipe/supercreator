@@ -1,5 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
+import { signMediaToken } from "@/lib/mediaToken";
+import { toPreviewUrl } from "@/lib/driveLink";
 
 export const dynamic = "force-dynamic";
 
@@ -40,11 +42,13 @@ export async function POST(req) {
     // Only look up the user when we actually need to — free previews stay
     // available to logged-out visitors.
     let isOwner = false;
+    let uid = "";
     if (!isFreePreview) {
       const user = await getUserFromRequest(req);
       if (!user) return NextResponse.json({ error: "Please sign in to watch this lesson." }, { status: 401 });
 
       isOwner = course.owner_id === user.id;
+      uid = user.id;
       if (!isOwner) {
         const { data: p } = await supabaseAdmin.from("mp_purchases").select("id, expires_at")
           .eq("product_type", "course").eq("product_id", courseId).eq("buyer_id", user.id).maybeSingle();
@@ -58,19 +62,34 @@ export async function POST(req) {
       }
     }
 
-    // Notes can carry MANY files — sign each and return them as an array.
+    const ttl = isFreePreview && !isOwner ? PREVIEW_TTL : TTL;
+    const allowDownload = lesson.type === "notes" && lesson.allowDownload === true;
+
+    // Notes can carry MANY files (uploads and/or Drive links).
+    //   download ON  -> real signed URLs (the Download button needs the file)
+    //   download OFF -> /api/learn/stream tokens: the file can be shown by our
+    //                   viewer but not opened/saved as a link (see that route)
     if (lesson.type === "notes" && Array.isArray(lesson.files) && lesson.files.length) {
-      const ttl = isFreePreview && !isOwner ? PREVIEW_TTL : TTL;
       const files = [];
       for (const f of lesson.files) {
+        if (f?.driveUrl) {
+          files.push({ drive: true, url: f.driveUrl, preview: toPreviewUrl(f.driveUrl), fileName: f.fileName || "Google Drive file", fileType: "link" });
+          continue;
+        }
         if (!f?.mediaPath) continue;
-        const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(f.mediaPath, ttl);
-        if (!error && data?.signedUrl) files.push({ url: data.signedUrl, fileName: f.fileName || "", fileType: f.fileType || "" });
+        const isPdf = f.fileType === "application/pdf" || /\.pdf$/i.test(f.fileName || f.mediaPath);
+        if (allowDownload) {
+          const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(f.mediaPath, ttl);
+          if (!error && data?.signedUrl) files.push({ url: data.signedUrl, fileName: f.fileName || "", fileType: f.fileType || "" });
+        } else {
+          const t = signMediaToken({ path: f.mediaPath, kind: isPdf ? "pdf" : "file", mime: f.fileType || (isPdf ? "application/pdf" : ""), uid, ttl });
+          files.push({ stream: `/api/learn/stream?t=${t}`, url: "", fileName: f.fileName || "", fileType: f.fileType || (isPdf ? "application/pdf" : "") });
+        }
       }
       return NextResponse.json({
         files,
         url: files[0]?.url || "",
-        allowDownload: lesson.allowDownload === true,
+        allowDownload,
         expiresIn: ttl
       }, { headers: { "Cache-Control": "no-store" } });
     }
@@ -89,15 +108,27 @@ export async function POST(req) {
       });
     }
 
-    const ttl = isFreePreview && !isOwner ? PREVIEW_TTL : TTL;
-    const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(path, ttl);
-    if (error) throw new Error(`Could not sign media URL: ${error.message}`);
+    // Notes with download ON get the real file; everything else (video,
+    // audio, view-only notes) is served through the stream proxy so no
+    // reusable file URL ever reaches the page.
+    if (allowDownload) {
+      const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(path, ttl);
+      if (error) throw new Error(`Could not sign media URL: ${error.message}`);
+      return NextResponse.json({ url: data.signedUrl, legacy: false, allowDownload: true, expiresIn: ttl }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const kind = lesson.type === "audio" ? "audio"
+      : lesson.type === "notes" ? (/\.pdf$/i.test(lesson.fileName || path) || lesson.fileType === "application/pdf" ? "pdf" : "file")
+      : "video";
+    const mime = lesson.fileType || lesson.mime || (kind === "pdf" ? "application/pdf" : "");
+    const t = signMediaToken({ path, kind, mime, uid, ttl });
+    const stream = `/api/learn/stream?t=${t}`;
 
     return NextResponse.json({
-      url: data.signedUrl,
+      url: stream,
+      stream,
       legacy: false,
-      // Notes honour the creator's toggle. Video is never downloadable.
-      allowDownload: lesson.type === "notes" ? lesson.allowDownload === true : false,
+      allowDownload: false,
       expiresIn: ttl
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

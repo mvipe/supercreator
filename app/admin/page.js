@@ -3,8 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, supabase } from "@/lib/supabase";
 import { inr, ytEmbed, videoThumb, uploadImage } from "@/lib/courseModel";
+import { toImageUrl } from "@/lib/driveLink";
 import { useAuth } from "@/components/AuthProvider";
 import NotificationsPanel from "@/components/admin/NotificationsPanel";
+import ProCreatorsPanel from "@/components/admin/ProCreatorsPanel";
+import ReferralsPanel from "@/components/admin/ReferralsPanel";
 
 const PAYOUT_TABS = ["requested", "approved", "processing", "paid", "rejected", "all"];
 const STATUS_STYLE = {
@@ -49,7 +52,7 @@ export default function AdminPanel() {
         {/* Tabs: their own full-width, horizontally-scrollable row on mobile;
             inline next to the title on desktop. */}
         <nav className="order-3 -mx-4 flex w-full gap-1 overflow-x-auto px-4 pb-0.5 sm:order-none sm:mx-0 sm:ml-6 sm:w-auto sm:overflow-visible sm:px-0">
-          {[["payouts", "Payouts"], ["tutorials", "Tutorials"], ...(staff ? [["creators", "Creators"], ["leaderboard", "Leaderboard"], ["kyc", "KYC"], ["notifications", "Notifications"]] : [])].map(([id, label]) => (
+          {[["payouts", "Payouts"], ["tutorials", "Tutorials"], ...(staff ? [["creators", "Creators"], ["pro", "Pro Creators"], ["leaderboard", "Leaderboard"], ["kyc", "KYC"], ["referrals", "Refer & Earn"], ["notifications", "Notifications"]] : [])].map(([id, label]) => (
             <button key={id} onClick={() => setSection(id)}
               className={`shrink-0 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors sm:px-4 ${section === id ? "bg-white/10 text-white" : "text-white/55 hover:text-white"}`}>
               {label}
@@ -65,6 +68,8 @@ export default function AdminPanel() {
 
       {section === "payouts" ? <PayoutsPanel setDenied={() => setState("denied")} denied={state === "denied"} />
         : section === "creators" ? <CreatorsPanel canManageAdmins={superAdmin} />
+        : section === "pro" ? <ProCreatorsPanel />
+        : section === "referrals" ? <ReferralsPanel />
         : section === "leaderboard" ? <LeaderboardPanel />
         : section === "kyc" ? <KycReviewPanel />
         : section === "notifications" ? <NotificationsPanel />
@@ -270,7 +275,7 @@ function TutorialsPanel({ setDenied, denied }) {
             <h3 className="font-display text-lg font-bold">{editing.id ? "Edit tutorial" : "Add tutorial"}</h3>
             <div className="mt-4 space-y-4">
               <div><label className="label">Title</label><input className="input" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></div>
-              <div><label className="label">Video link (YouTube, Vimeo or direct URL)</label><input className="input" placeholder="https://youtu.be/…" value={editing.video_url} onChange={(e) => setEditing({ ...editing, video_url: e.target.value })} /></div>
+              <div><label className="label">Video link (YouTube, Vimeo, Google Drive or direct URL)</label><input className="input" placeholder="https://youtu.be/…" value={editing.video_url} onChange={(e) => setEditing({ ...editing, video_url: e.target.value })} /></div>
 
               {/* Cover art for the Learn grid. Blank falls back to the video's
                   own thumbnail, so this is optional. */}
@@ -287,8 +292,9 @@ function TutorialsPanel({ setDenied, denied }) {
                       {uploading ? "Uploading…" : editing.cover_image ? "Replace image" : "Upload image"}
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => onCover(e.target.files)} />
                     </label>
-                    <input className="input" placeholder="…or paste an image URL" value={editing.cover_image || ""}
-                      onChange={(e) => setEditing({ ...editing, cover_image: e.target.value })} />
+                    <input className="input" placeholder="…or paste an image / Google Drive link" value={editing.cover_image || ""}
+                      onChange={(e) => setEditing({ ...editing, cover_image: e.target.value })}
+                      onBlur={(e) => setEditing((x) => ({ ...x, cover_image: toImageUrl(e.target.value) }))} />
                   </div>
                   {editing.cover_image && (
                     <button onClick={() => setEditing({ ...editing, cover_image: "" })} className="shrink-0 text-xs font-semibold text-danger">Remove</button>
@@ -628,7 +634,7 @@ const isoDay = (d) => new Date(d).toISOString().slice(0, 10);
 const TOP_OPTIONS = [["10", "Top 10"], ["15", "Top 15"], ["100", "Top 100"], ["custom", "Custom"]];
 const RANGE_OPTIONS = [
   ["today", "Today"], ["yesterday", "Yesterday"], ["7d", "Last 7 days"],
-  ["month", "Last month"], ["year", "Last year"], ["custom", "Custom"]
+  ["this_month", "This month"], ["month", "Last 30 days"], ["year", "Last year"], ["custom", "Custom"]
 ];
 
 // How often the board re-pulls on its own. The board used to be a one-shot
@@ -788,6 +794,9 @@ function KycReviewPanel() {
   const [denied, setDenied] = useState(false);
   const [notes, setNotes] = useState({});
   const [busyId, setBusyId] = useState(null);
+  const [editing, setEditing] = useState(null); // { userId, fields, adminNote }
+  const [editErr, setEditErr] = useState("");
+  const [q, setQ] = useState("");
 
   async function load() {
     try { const { submissions } = await apiFetch(`/api/admin/kyc?status=${tab}`, undefined, "GET"); setRows(submissions); setReady(true); }
@@ -802,13 +811,67 @@ function KycReviewPanel() {
     finally { setBusyId(null); }
   }
 
+  function startEdit(k) {
+    setEditErr("");
+    setEditing({
+      userId: k.user_id,
+      name: k.creator?.display_name || k.legal_name || "Creator",
+      status: k.status,
+      adminNote: k.admin_note || "",
+      fields: {
+        legal_name: k.legal_name || "", pan: k.pan || "", gst: k.gst || "",
+        bank_holder: k.bank_holder || "", bank_account: k.bank_account || "", ifsc: k.ifsc || "",
+        doc_url: k.doc_url || ""
+      }
+    });
+  }
+  const setField = (patch) => setEditing((e) => ({ ...e, fields: { ...e.fields, ...patch } }));
+
+  async function saveEdit() {
+    setBusyId(editing.userId); setEditErr("");
+    try {
+      await apiFetch("/api/admin/kyc", { userId: editing.userId, fields: editing.fields, adminNote: editing.adminNote, status: editing.status }, "PATCH");
+      setEditing(null);
+      await load();
+    } catch (e) { setEditErr(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  async function revoke(k) {
+    if (!confirm(`Move ${k.legal_name || "this creator"} back to "under review"? They won't be able to request payouts until you approve again.`)) return;
+    setBusyId(k.user_id);
+    try { await apiFetch("/api/admin/kyc", { userId: k.user_id, status: "under_review" }, "PATCH"); await load(); }
+    catch (e) { alert(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  async function remove(k) {
+    if (!confirm(`Remove the KYC of ${k.legal_name || "this creator"}? All details are deleted, and they'll have to submit KYC again before any payout.`)) return;
+    setBusyId(k.user_id);
+    try { await apiFetch(`/api/admin/kyc?userId=${encodeURIComponent(k.user_id)}`, undefined, "DELETE"); await load(); }
+    catch (e) { alert(e.message); }
+    finally { setBusyId(null); }
+  }
+
   if (denied) return <Denied />;
   if (!ready) return <div className="flex min-h-[50vh] items-center justify-center text-inkmuted">Loading…</div>;
 
+  const list = rows.filter((k) => {
+    const s = q.toLowerCase().trim();
+    if (!s) return true;
+    return [k.legal_name, k.pan, k.creator?.display_name, k.creator?.username, k.bank_account]
+      .some((v) => (v || "").toLowerCase().includes(s));
+  });
+
   return (
-    <section className="px-8 py-8">
-      <h2 className="font-display text-2xl font-bold">KYC verification</h2>
-      <p className="mt-0.5 text-sm text-inkmuted">Review creator documents and approve or reject.</p>
+    <section className="px-4 py-6 sm:px-8 sm:py-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-bold">KYC verification</h2>
+          <p className="mt-0.5 text-sm text-inkmuted">Review documents, approve or reject — and edit or remove verified records.</p>
+        </div>
+        <input className="input max-w-xs" placeholder="Search name, PAN, @user…" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
       <div className="mt-5 flex flex-wrap gap-2">
         {KYC_TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
@@ -818,18 +881,19 @@ function KycReviewPanel() {
         ))}
       </div>
       <div className="mt-6 space-y-4">
-        {rows.length === 0 && <div className="card px-5 py-16 text-center text-sm text-inkmuted">No {tab.replace("_", " ")} submissions.</div>}
-        {rows.map((k) => (
+        {list.length === 0 && <div className="card px-5 py-16 text-center text-sm text-inkmuted">No {tab.replace("_", " ")} submissions{q ? " match that search" : ""}.</div>}
+        {list.map((k) => (
           <div key={k.user_id} className="card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-display text-lg font-bold">{k.legal_name || "—"}</span>
                   <span className={`pill ${KYC_ST[k.status]}`}>{k.status.replace("_", " ")}</span>
                 </div>
                 <div className="mt-1 text-sm text-inkmuted">
                   {k.creator?.display_name || "Creator"}{k.creator?.username && ` · @${k.creator.username}`}
-                  {k.submitted_at && ` · ${new Date(k.submitted_at).toLocaleString("en-IN")}`}
+                  {k.submitted_at && ` · submitted ${new Date(k.submitted_at).toLocaleString("en-IN")}`}
+                  {k.status === "verified" && k.reviewed_at && ` · verified ${new Date(k.reviewed_at).toLocaleDateString("en-IN")}`}
                 </div>
                 <div className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
                   <div>PAN: <b>{k.pan || "—"}</b></div>
@@ -837,16 +901,27 @@ function KycReviewPanel() {
                   <div>Bank: <b>{k.bank_holder || "—"}</b></div>
                   <div>A/C: <b>{k.bank_account || "—"}</b> · IFSC {k.ifsc || "—"}</div>
                 </div>
-                {k.doc_url && <a href={k.doc_url} target="_blank" className="mt-2 inline-block text-sm font-semibold text-brand">View document ↗</a>}
+                {k.doc_url && <a href={k.doc_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand">View document ↗</a>}
               </div>
+              {/* Verified / rejected records can be corrected or removed. */}
+              {k.status !== "under_review" && (
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button onClick={() => startEdit(k)} disabled={busyId === k.user_id} className="btn-ghost text-xs">✎ Edit info</button>
+                  {k.status === "verified" && (
+                    <button onClick={() => revoke(k)} disabled={busyId === k.user_id} className="btn-ghost text-xs">Revoke verification</button>
+                  )}
+                  <button onClick={() => remove(k)} disabled={busyId === k.user_id} className="btn-ghost text-xs text-danger">Remove</button>
+                </div>
+              )}
             </div>
-            {["under_review"].includes(k.status) && (
+            {k.status === "under_review" && (
               <div className="mt-4 border-t border-line pt-4">
                 <input className="input" placeholder="Note (shown to creator if rejected)"
                   value={notes[k.user_id] ?? k.admin_note ?? ""} onChange={(e) => setNotes({ ...notes, [k.user_id]: e.target.value })} />
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => review(k.user_id, "verified")} disabled={busyId === k.user_id} className="btn-brand">Approve</button>
                   <button onClick={() => review(k.user_id, "rejected")} disabled={busyId === k.user_id} className="btn-ghost text-danger">Reject</button>
+                  <button onClick={() => startEdit(k)} disabled={busyId === k.user_id} className="btn-ghost">✎ Edit info</button>
                 </div>
               </div>
             )}
@@ -854,6 +929,42 @@ function KycReviewPanel() {
           </div>
         ))}
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={() => setEditing(null)}>
+          <div className="my-auto w-full max-w-lg rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-display text-lg font-bold">Edit KYC — {editing.name}</h3>
+                <p className="mt-0.5 text-xs text-inkmuted">Changes apply immediately. The creator is not asked to resubmit.</p>
+              </div>
+              <button onClick={() => setEditing(null)} className="rounded-lg p-1 text-inkmuted hover:bg-paper" aria-label="Close">✕</button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2"><label className="label">Legal name</label><input className="input" value={editing.fields.legal_name} onChange={(e) => setField({ legal_name: e.target.value })} /></div>
+              <div><label className="label">PAN</label><input className="input uppercase" value={editing.fields.pan} onChange={(e) => setField({ pan: e.target.value })} /></div>
+              <div><label className="label">GST (optional)</label><input className="input uppercase" value={editing.fields.gst} onChange={(e) => setField({ gst: e.target.value })} /></div>
+              <div className="sm:col-span-2"><label className="label">Account holder</label><input className="input" value={editing.fields.bank_holder} onChange={(e) => setField({ bank_holder: e.target.value })} /></div>
+              <div><label className="label">Account number</label><input className="input" value={editing.fields.bank_account} onChange={(e) => setField({ bank_account: e.target.value })} /></div>
+              <div><label className="label">IFSC</label><input className="input uppercase" value={editing.fields.ifsc} onChange={(e) => setField({ ifsc: e.target.value })} /></div>
+              <div className="sm:col-span-2"><label className="label">Document link</label><input className="input" placeholder="https://…" value={editing.fields.doc_url} onChange={(e) => setField({ doc_url: e.target.value })} /></div>
+              <div><label className="label">Status</label>
+                <select className="input" value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })}>
+                  <option value="verified">Verified</option>
+                  <option value="under_review">Under review</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <div><label className="label">Admin note</label><input className="input" value={editing.adminNote} onChange={(e) => setEditing({ ...editing, adminNote: e.target.value })} /></div>
+            </div>
+            {editErr && <p className="mt-3 text-sm text-danger">{editErr}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setEditing(null)} className="btn-ghost">Cancel</button>
+              <button onClick={saveEdit} disabled={busyId === editing.userId} className="btn-brand">{busyId === editing.userId ? "Saving…" : "Save changes"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

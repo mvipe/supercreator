@@ -1,6 +1,7 @@
 import "./globals.css";
 import Script from "next/script";
 import { AuthProvider } from "@/components/AuthProvider";
+import RefCapture from "@/components/RefCapture";
 
 const GA_ID = "G-1NLCLVQK38";
 const BASE = process.env.NEXT_PUBLIC_APP_URL || "https://supercreators.in";
@@ -93,6 +94,7 @@ export default function RootLayout({ children }) {
             gtag('config', '${GA_ID}');
           `}
         </Script>
+        <RefCapture />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

@@ -58,3 +58,21 @@ body {
 }
 .sc-fade-in { animation: sc-fade-in .18s ease-out both; }
 .sc-rise-in { animation: sc-rise-in .26s cubic-bezier(.2,1.1,.4,1) both; }
+
+/* ---------- Course content protection (see ContentProtection.jsx) ---------- */
+.sc-protected,
+.sc-protect-page img,
+.sc-protect-page video,
+.sc-protect-page canvas {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+@media print {
+  .sc-protect-page .sc-protected,
+  .sc-protect-page video,
+  .sc-protect-page audio,
+  .sc-protect-page iframe,
+  .sc-protect-page canvas { display: none !important; }
+}

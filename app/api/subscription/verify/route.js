@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { supabaseAdmin, getUserFromRequest } from "@/lib/supabaseAdmin";
 import { grantPro, isProProfile, PLAN_DAYS } from "@/lib/subscription";
+import { awardReferral } from "@/lib/referrals";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,10 @@ export async function POST(req) {
       applied_at: new Date().toISOString()
     }).eq("id", order.id);
     if (updErr) throw updErr;
+
+    // 6. Refer & Earn — reward whoever referred this creator, if the admin's
+    //    settings say a Pro payment earns one. Never blocks the response.
+    await awardReferral({ referredUserId: user.id, event: "subscription", orderId: order.id, paymentPaise: order.amount });
 
     return NextResponse.json({ ok: true, plan, planExpiresAt });
   } catch (e) {

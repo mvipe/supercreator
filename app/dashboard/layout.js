@@ -47,6 +47,8 @@ export default function DashLayout({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPro, setIsPro] = useState(true); // assume true until known, so no flash
   const [blocked, setBlocked] = useState(false);
+  // Admin can switch Refer & Earn off platform-wide — hide the nav entry then.
+  const [referOn, setReferOn] = useState(true);
   // A sub-admin runs on the creator's plan, so the upgrade card must not
   // appear for them — they have nothing to buy.
   const [canUpgrade, setCanUpgrade] = useState(false);
@@ -65,6 +67,7 @@ export default function DashLayout({ children }) {
         setIsAdmin(!!me.admin);
         setIsPro(!!me.isPro);
         setBlocked(!!me.blocked);
+        setReferOn(me.referralsEnabled !== false);
         setCanUpgrade(!me.isTeamMember && me.planSource !== "owner" && me.planSource !== "staff");
       });
     }
@@ -131,7 +134,7 @@ export default function DashLayout({ children }) {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3.5 pb-4">
-          {MAIN.filter((n) => allowed(n.href)).map((n) => <NavLink key={`m-${n.href}`} n={n} theme="light" onClick={() => setMobileNavOpen(false)} />)}
+          {MAIN.filter((n) => allowed(n.href) && (referOn || n.href !== "/dashboard/refer")).map((n) => <NavLink key={`m-${n.href}`} n={n} theme="light" onClick={() => setMobileNavOpen(false)} />)}
           {!isTeamMember && <NavLink n={{ href: "/dashboard/team", label: "Sub-Admins", icon: ICONS.audience }} theme="light" onClick={() => setMobileNavOpen(false)} />}
           {isAdmin && (
             <Link href="/admin" onClick={() => setMobileNavOpen(false)}
@@ -209,7 +212,7 @@ export default function DashLayout({ children }) {
           <span className="font-display text-lg text-[#11162c]"><b className="font-bold">Super</b>Creators</span>
         </Link>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3.5 pb-4">
-          {MAIN.filter((n) => allowed(n.href)).map((n) => <NavLink key={n.href} n={n} theme="light" />)}
+          {MAIN.filter((n) => allowed(n.href) && (referOn || n.href !== "/dashboard/refer")).map((n) => <NavLink key={n.href} n={n} theme="light" />)}
           {!isTeamMember && <NavLink n={{ href: "/dashboard/team", label: "Sub-Admins", icon: ICONS.audience }} theme="light" />}
           {isAdmin && (
             <Link href="/admin"
