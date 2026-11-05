@@ -12,10 +12,12 @@ import PageDetailsTab from "@/components/editor/PageDetailsTab";
 import CourseTab from "@/components/editor/CourseTab";
 import SettingsTab from "@/components/editor/SettingsTab";
 import PreviewPanel from "@/components/editor/PreviewPanel";
+import AssignmentsTab from "@/components/editor/AssignmentsTab";
 
 const TABS = [
   { id: "page", label: "Page details" },
   { id: "course", label: "Course" },
+  { id: "assignments", label: "Assignments" },
   { id: "settings", label: "Settings" }
 ];
 
@@ -116,7 +118,7 @@ export default function CourseEditor() {
           <span className="truncate text-sm font-bold uppercase tracking-wide">{course.title}</span>
           <span className={`pill ml-auto ${course.status === "published" ? "bg-teal-soft text-teal" : "bg-paper text-inkmuted"}`}>{course.status}</span>
         </header>
-        <nav className="flex gap-7 border-b border-line px-7 pt-3">
+        <nav className="flex gap-6 overflow-x-auto border-b border-line px-7 pt-3">
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} className={`tab ${tab === t.id ? "active" : ""}`}>{t.label}</button>
           ))}
@@ -124,6 +126,7 @@ export default function CourseEditor() {
         <div className="flex-1 overflow-y-auto px-7 py-8 pb-32">
           {tab === "page" && <PageDetailsTab course={course} patch={patch} />}
           {tab === "course" && <CourseTab course={course} patch={patch} />}
+          {tab === "assignments" && <AssignmentsTab course={course} patch={patch} />}
           {tab === "settings" && <SettingsTab course={course} patch={patch} />}
         </div>
         {issues.length > 0 && (
@@ -148,7 +151,7 @@ export default function CourseEditor() {
             {course.status === "published" ? (
               <>
                 <a href={`/c/${course.slug}`} target="_blank" className="btn-ghost text-sm px-3 py-2">View live ↗</a>
-                <a href={`/studio/course/${id}/submissions`} target="_blank" className="btn-ghost text-sm px-3 py-2">📋 Submissions</a>
+                <button onClick={() => setTab("assignments")} className="btn-ghost text-sm px-3 py-2">📋 Submissions</button>
                 <button onClick={unpublish} disabled={publishing} className="btn-ghost text-sm px-3 py-2">Unpublish</button>
                 <button onClick={save} disabled={saving || !dirty} className="btn-ink text-sm px-3 py-2">{saving ? "Saving…" : "Save changes"}</button>
               </>
