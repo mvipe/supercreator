@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Field, RadioCard, Switch } from "@/components/ui";
 import { slugify, uploadImage } from "@/lib/courseModel";
+import LinkAdd from "@/components/LinkAdd";
+import { linkLabel } from "@/lib/driveLink";
 import { useAuth } from "@/components/AuthProvider";
 
 function SlugField({ product, patch, prefix }) {
@@ -42,6 +44,7 @@ function ImagesField({ label, images = [], onChange }) {
           {up ? "…" : "+ Upload"}
           <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
         </label>
+        <LinkAdd kind="image" label="🔗 Drive link" onAdd={(url) => onChange([...images, url])} />
       </div>
     </Field>
   );
@@ -269,7 +272,10 @@ export function LockedForm({ product, patch, patchData }) {
               <button type="button" className="text-xs font-semibold text-danger" onClick={() => patchData({ files: d.files.filter((_, j) => j !== i) })}>✕</button>
             </div>
           ))}
-          <label className="btn-ghost cursor-pointer">{up ? "Uploading…" : "+ Upload file"}<input type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} /></label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="btn-ghost cursor-pointer">{up ? "Uploading…" : "+ Upload file"}<input type="file" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} /></label>
+            <LinkAdd kind="file" label="🔗 Add Drive link" buttonClassName="btn-ghost" onAdd={(url, raw) => patchData({ files: [...(d.files || []), { url, name: linkLabel(raw) }] })} />
+          </div>
         </div>
       </Field>
       <Field label="Unlock price (₹)" required><input className="input" type="number" min="1" value={d.price} onChange={(e) => patchData({ price: Number(e.target.value) })} /></Field>

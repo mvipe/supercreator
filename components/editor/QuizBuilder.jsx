@@ -5,12 +5,13 @@ import MathFormulaToolbar from "@/components/editor/MathFormulaToolbar";
 import { LatexText } from "@/components/editor/LatexRenderer";
 import AiQuizModal from "@/components/editor/AiQuizModal";
 import QuizImportModal from "@/components/editor/QuizImportModal";
+import LinkAdd from "@/components/LinkAdd";
 
 /**
  * Modern quiz builder modal - inspired by Typeform, Google Forms, Quizlet
  * Provides a creator-friendly interface for building quizzes with single/multiple choice
  */
-export default function QuizBuilder({ lesson, onChange, userId, onClose }) {
+export default function QuizBuilder({ lesson, onChange, userId, onClose, initialImport })  {
   const questions = lesson.questions || [];
   const setQuestions = (q) => onChange({ questions: q });
   const [activeQuestionId, setActiveQuestionId] = useState(questions[0]?.id || null);
@@ -20,7 +21,7 @@ export default function QuizBuilder({ lesson, onChange, userId, onClose }) {
   const questionType = activeQuestion?.type || "single"; // "single" or "multiple"
   const [imageUploading, setImageUploading] = useState(false);
   const [showAi, setShowAi] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [showImport, setShowImport] = useState(!!initialImport);
 
   /** Bulk-add questions from the AI generator or an import file. */
   function addQuestions(newOnes, mode = "append") {
@@ -171,7 +172,7 @@ export default function QuizBuilder({ lesson, onChange, userId, onClose }) {
               </button>
               <button onClick={() => setShowImport(true)}
                 className="rounded-lg border border-line px-2 py-1.5 text-[11px] font-bold text-inkmuted hover:border-brand hover:text-brand">
-                📥 Import
+                📄 Import doc
               </button>
             </div>
           </div>
@@ -288,11 +289,12 @@ export default function QuizBuilder({ lesson, onChange, userId, onClose }) {
                     <div className="text-sm font-semibold text-ink">Question image</div>
                     <div className="text-xs text-inkmuted">Optional image to illustrate the question.</div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <label className="btn btn-ghost cursor-pointer text-sm">
                       {imageUploading ? "Uploading…" : activeQuestion.image ? "Replace image" : "Upload image"}
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleQuestionImage(e.target.files?.[0])} />
                     </label>
+                    <LinkAdd kind="image" label="🔗 Link" buttonClassName="btn btn-ghost text-sm" onAdd={(url) => updateQ({ image: url })} />
                     {activeQuestion.image && (
                       <button type="button" className="text-xs text-danger" onClick={() => updateQ({ image: "" })}>
                         Remove
@@ -393,6 +395,8 @@ export default function QuizBuilder({ lesson, onChange, userId, onClose }) {
                             {imageUploading ? "Uploading…" : "Upload option image"}
                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleOptionImage(oi, e.target.files?.[0])} />
                           </label>
+                          <LinkAdd kind="image" label="🔗 Or paste a Drive image link" buttonClassName="inline-flex items-center gap-2 rounded-lg border border-line bg-paper px-3 py-2 text-xs font-semibold text-inkmuted hover:border-brand"
+                            onAdd={(url) => updateOpt(oi, { image: url })} />
                         </div>
                       </div>
                     </div>

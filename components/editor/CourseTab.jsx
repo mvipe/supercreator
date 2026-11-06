@@ -6,6 +6,8 @@ import { useAuth } from "@/components/AuthProvider";
 import MathFormulaToolbar from "@/components/editor/MathFormulaToolbar";
 import { LatexText } from "@/components/editor/LatexRenderer";
 import QuizBuilder from "@/components/editor/QuizBuilder";
+import LinkAdd from "@/components/LinkAdd";
+import { linkLabel, isDriveUrl } from "@/lib/driveLink";
 
 const LESSON_TYPES = [
   { type: "video", icon: "🎬", title: "Video", desc: "Engage learners with engaging and impactful video lessons." },
@@ -24,7 +26,7 @@ function newLesson(type, n) {
   // Start with no questions — the builder shows a "Create first question"
   // empty state instead of dumping a pre-made blank question on the creator.
   if (type === "quiz") return { ...base, title: "", quizTitle: `Quiz ${n}`, questions: [] };
-  if (type === "assignment") return { ...base, prompt: "", allowUpload: true };
+  if (type === "assignment") return { ...base, prompt: "", allowUpload: true, allowLink: true, dueDate: "", maxMarks: 100, attachments: [] };
   // allowDownload defaults OFF — protecting notes is the whole point of the
   // type, so opting IN to downloads should be a deliberate choice.
   if (type === "notes") return { ...base, mediaPath: "", fileName: "", fileType: "", allowDownload: false, text: "" };
@@ -138,22 +140,50 @@ export default function CourseTab({ course, patch }) {
 
       {/* ---------- Live classes ---------- */}
       <SectionCard title="Live classes (optional)">
-        <p className="mt-1 text-xs text-inkmuted">Weekend webinars, AMAs, doubt-clearing sessions — the join link unlocks for buyers.</p>
+        <p className="mt-1 text-xs text-inkmuted">
+          Weekend webinars, AMAs, doubt-clearing sessions. Add a Google Meet / Zoom link, a YouTube Live link, or both —
+          YouTube Live plays right inside the course, Meet/Zoom opens in a new tab. Links unlock for buyers only.
+        </p>
         <div className="mt-3 space-y-3">
-          {live.map((s, i) => (
-            <div key={s.id} className="rounded-card border border-line p-3">
-              <input className="input mb-2" placeholder="Session title" value={s.title}
-                onChange={(e) => setLive(live.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} />
-              <div className="grid grid-cols-2 gap-2">
-                <input className="input" type="datetime-local" value={s.datetime}
-                  onChange={(e) => setLive(live.map((x, j) => j === i ? { ...x, datetime: e.target.value } : x))} />
-                <input className="input" placeholder="Meet / Zoom link" value={s.link}
-                  onChange={(e) => setLive(live.map((x, j) => j === i ? { ...x, link: e.target.value } : x))} />
+          {live.map((s, i) => {
+            const set = (p) => setLive(live.map((x, j) => j === i ? { ...x, ...p } : x));
+            const platform = s.platform || (s.youtubeUrl && s.link ? "both" : s.youtubeUrl ? "youtube" : "meet");
+            return (
+              <div key={s.id} className="rounded-card border border-line p-3">
+                <input className="input mb-2" placeholder="Session title" value={s.title}
+                  onChange={(e) => set({ title: e.target.value })} />
+                <input className="input mb-2" type="datetime-local" value={s.datetime}
+                  onChange={(e) => set({ datetime: e.target.value })} />
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {[["meet", "📹 Meet / Zoom"], ["youtube", "▶️ YouTube Live"], ["both", "Both"]].map(([v, l]) => (
+                    <button key={v} type="button" onClick={() => set({ platform: v })}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${platform === v ? "border-brand bg-brand-soft text-brand" : "border-line text-inkmuted hover:text-ink"}`}>{l}</button>
+                  ))}
+                </div>
+                {(platform === "meet" || platform === "both") && (
+                  <input className="input mb-2" placeholder="Google Meet / Zoom link" value={s.link || ""}
+                    onChange={(e) => set({ link: e.target.value })} />
+                )}
+                {(platform === "youtube" || platform === "both") && (
+                  <>
+                    <input className="input mb-1" placeholder="YouTube Live link — e.g. https://youtube.com/live/abc123" value={s.youtubeUrl || ""}
+                      onChange={(e) => set({ youtubeUrl: e.target.value })} />
+                    <p className="mb-2 text-[11px] text-inkmuted">
+                      Schedule the stream in YouTube Studio as <b>Unlisted</b>, then paste its link. The same link becomes the recording after the class.
+                    </p>
+                    <label className="mb-2 flex items-center gap-2 text-xs font-semibold">
+                      <input type="checkbox" className="accent-brand" checked={s.youtubeChat !== false} onChange={(e) => set({ youtubeChat: e.target.checked })} />
+                      Show YouTube live chat next to the stream
+                    </label>
+                  </>
+                )}
+                <textarea className="input min-h-[60px]" placeholder="What's this session about? (optional)" value={s.description || ""}
+                  onChange={(e) => set({ description: e.target.value })} />
+                <button type="button" className="mt-2 text-xs font-semibold text-danger" onClick={() => setLive(live.filter((_, j) => j !== i))}>Remove</button>
               </div>
-              <button type="button" className="mt-2 text-xs font-semibold text-danger" onClick={() => setLive(live.filter((_, j) => j !== i))}>Remove</button>
-            </div>
-          ))}
-          <button type="button" className="btn-ghost" onClick={() => setLive([...live, { id: uid(), title: "", datetime: "", link: "" }])}>Set up a live class</button>
+            );
+          })}
+          <button type="button" className="btn-ghost" onClick={() => setLive([...live, { id: uid(), title: "", datetime: "", platform: "meet", link: "", youtubeUrl: "", youtubeChat: true, description: "" }])}>Set up a live class</button>
         </div>
       </SectionCard>
 
@@ -261,11 +291,12 @@ function LessonCoverField({ lesson, onChange, userId }) {
         <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-paper text-xs text-inkmuted">
           {shown ? <img src={shown} alt="" className="h-full w-full object-cover" /> : "No cover"}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-y-2">
           <label className="btn-ghost cursor-pointer">
             {busy ? "Uploading…" : lesson.coverImage ? "Replace" : "Upload cover"}
             <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
           </label>
+          <LinkAdd kind="image" label="🔗 Drive link" className="ml-2" onAdd={(url) => onChange({ coverImage: url })} />
           {lesson.coverImage
             ? <button type="button" onClick={() => onChange({ coverImage: "" })} className="ml-2 text-xs font-semibold text-danger">Remove</button>
             : auto && <span className="ml-2 text-xs text-inkmuted">Using the video&rsquo;s own thumbnail</span>}
@@ -328,8 +359,10 @@ function LessonBody({ lesson, onChange, userId }) {
     if (!file) return;
     setAudioUploading(true);
     try {
-      const url = await uploadVideo(userId, file);
-      onChange({ audioFile: url, audioUrl: url });
+      // Private bucket: learners stream it through /api/learn/stream and
+      // never get a downloadable URL.
+      const path = await uploadSecureMedia(userId, file, "audio");
+      onChange({ audioPath: path, audioFile: file.name, audioUrl: "", fileType: file.type || "audio/mpeg" });
     } catch (error) {
       alert("Failed to upload audio: " + error.message);
     } finally {
@@ -340,12 +373,13 @@ function LessonBody({ lesson, onChange, userId }) {
   if (type === "video") {
     return (
       <>
-        <Field label="Video URL" hint="YouTube / Vimeo / direct .mp4 link">
+        <Field label="Video URL" hint="YouTube / Vimeo / Google Drive / direct .mp4 link">
           <input className="input" placeholder="https://youtu.be/…" value={lesson.videoUrl || ""} onChange={(e) => onChange({ videoUrl: e.target.value })} />
         </Field>
         <p className="-mt-1 text-xs text-inkmuted">
           YouTube links play in SuperCreators&rsquo; own player — no YouTube logo, title bar or
-          &ldquo;Watch on YouTube&rdquo; button.
+          &ldquo;Watch on YouTube&rdquo; button. Google Drive videos must be shared as
+          &ldquo;Anyone with the link&rdquo;.
         </p>
 
         {/* Direct upload is parked for now — paste a URL instead.
@@ -383,8 +417,8 @@ function LessonBody({ lesson, onChange, userId }) {
   if (type === "audio") {
     return (
       <>
-        <Field label="Audio URL" hint="Direct .mp3 / .m4a link or hosted audio">
-          <input className="input" placeholder="https://…/audio.mp3" value={lesson.audioUrl || ""} onChange={(e) => onChange({ audioUrl: e.target.value })} />
+        <Field label="Audio URL" hint="Direct .mp3 / .m4a link, hosted audio, or a public Google Drive link">
+          <input className="input" placeholder="https://…/audio.mp3" value={lesson.audioUrl || ""} onChange={(e) => onChange({ audioUrl: e.target.value, audioPath: "", audioFile: "" })} />
         </Field>
         <div className="my-3 flex items-center gap-3"><span className="text-xs text-inkmuted">OR</span><span className="h-px flex-1 bg-line" /></div>
         <Field label="Upload Audio" hint="Max 500 MB (.mp3, .m4a, .wav, .ogg)">
@@ -394,7 +428,13 @@ function LessonBody({ lesson, onChange, userId }) {
             {audioUploading && <span className="text-xs text-inkmuted">Uploading…</span>}
             <input type="file" accept="audio/*" className="hidden" onChange={(e) => handleAudioUpload(e.target.files?.[0])} disabled={audioUploading} />
           </label>
-          {lesson.audioFile && <p className="mt-2 text-xs text-teal">✓ Audio uploaded</p>}
+          {(lesson.audioPath || lesson.audioFile) && (
+            <p className="mt-2 text-xs text-teal">
+              ✓ Audio uploaded{typeof lesson.audioFile === "string" && !/^https?:/.test(lesson.audioFile) ? ` — ${lesson.audioFile}` : ""}
+              {lesson.audioPath && " · protected (stream only)"}
+              <button type="button" className="ml-2 font-semibold text-danger" onClick={() => onChange({ audioPath: "", audioFile: "", audioUrl: "" })}>Remove</button>
+            </p>
+          )}
         </Field>
         <Field label="Notes (optional)">
           <textarea className="input min-h-[80px]" value={lesson.text || ""} onChange={(e) => onChange({ text: e.target.value })} />
@@ -413,20 +453,7 @@ function LessonBody({ lesson, onChange, userId }) {
     );
   }
   if (type === "assignment") {
-    return (
-      <>
-        <Field label="Assignment prompt">
-          <textarea className="input min-h-[120px]" placeholder="Describe the task learners must complete…" value={lesson.prompt || ""} onChange={(e) => onChange({ prompt: e.target.value })} />
-        </Field>
-        <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2.5">
-          <div>
-            <div className="text-sm font-semibold">Allow file upload</div>
-            <div className="text-xs text-inkmuted">Learners can submit their work as a file</div>
-          </div>
-          <Switch on={lesson.allowUpload !== false} onChange={(v) => onChange({ allowUpload: v })} />
-        </div>
-      </>
-    );
+    return <AssignmentEditor lesson={lesson} onChange={onChange} userId={userId} />;
   }
   if (type === "notes") {
     return (
@@ -435,8 +462,9 @@ function LessonBody({ lesson, onChange, userId }) {
           <div className="space-y-2">
             {notesFiles.map((f, i) => (
               <div key={i} className="flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-2.5">
-                <span className="text-lg">📚</span>
+                <span className="text-lg">{f.driveUrl ? "🔗" : "📚"}</span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{f.fileName || `File ${i + 1}`}</span>
+                {f.driveUrl && <span className="shrink-0 rounded bg-paper px-1.5 py-0.5 text-[10px] font-semibold uppercase text-inkmuted">link</span>}
                 <button type="button" className="shrink-0 text-xs font-semibold text-danger" onClick={() => removeNote(i)}>Remove</button>
               </div>
             ))}
@@ -445,6 +473,15 @@ function LessonBody({ lesson, onChange, userId }) {
                 onChange={(e) => handleNotesUpload(e.target.files)} disabled={notesUploading} />
               {notesUploading ? "Uploading…" : (notesFiles.length ? "📎 Add more files (max 50 MB each)" : "📎 Upload notes (max 50 MB each)")}
             </label>
+            <LinkAdd kind="doc" label="🔗 Add a Google Drive / Docs link instead" className="w-full"
+              buttonClassName="w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm font-semibold text-inkmuted hover:border-brand hover:text-brand"
+              onAdd={(url, raw) => syncNotes([...notesFiles, { driveUrl: url, fileName: linkLabel(raw), fileType: "link" }])} />
+            {notesFiles.some((f) => f.driveUrl) && (
+              <p className="text-[11px] text-inkmuted">
+                Drive links open in Google&rsquo;s viewer. To stop downloads/printing of a Drive file, also turn on
+                Drive&rsquo;s own &ldquo;Viewers can&rsquo;t download&rdquo; setting (Share → ⚙).
+              </p>
+            )}
           </div>
         </Field>
 
@@ -479,6 +516,77 @@ function LessonBody({ lesson, onChange, userId }) {
   return null;
 }
 
+/* ---------------- Assignment editor (also used by the Assignments tab) ---------------- */
+export function AssignmentEditor({ lesson, onChange, userId }) {
+  const [busy, setBusy] = useState(false);
+  const files = lesson.attachments || [];
+
+  async function upload(list) {
+    const arr = Array.from(list || []);
+    if (!arr.length) return;
+    setBusy(true);
+    try {
+      const added = [];
+      for (const f of arr) {
+        if (f.size > 25 * 1024 * 1024) throw new Error(`${f.name} is over 25 MB — use a Google Drive link instead.`);
+        added.push({ url: await uploadImage(userId, f), name: f.name });
+      }
+      onChange({ attachments: [...files, ...added] });
+    } catch (e) { alert("Upload failed: " + e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <Field label="Assignment prompt">
+        <textarea className="input min-h-[120px]" placeholder="Describe the task learners must complete…" value={lesson.prompt || ""} onChange={(e) => onChange({ prompt: e.target.value })} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Due date (optional)">
+          <input className="input" type="datetime-local" value={lesson.dueDate || ""} onChange={(e) => onChange({ dueDate: e.target.value })} />
+        </Field>
+        <Field label="Maximum marks">
+          <input className="input" type="number" min="1" value={lesson.maxMarks ?? 100} onChange={(e) => onChange({ maxMarks: Math.max(1, Number(e.target.value) || 1) })} />
+        </Field>
+      </div>
+
+      <Field label="Reference files for learners (optional)" hint="Worksheets, question papers, sample answers">
+        <div className="space-y-2">
+          {files.map((f, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-2">
+              <span>{isDriveUrl(f.url) ? "🔗" : "📎"}</span>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate text-sm font-semibold text-brand hover:underline">{f.name || f.url}</a>
+              <button type="button" className="shrink-0 text-xs font-semibold text-danger" onClick={() => onChange({ attachments: files.filter((_, j) => j !== i) })}>Remove</button>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="btn-ghost cursor-pointer text-xs">
+              {busy ? "Uploading…" : "📎 Upload file"}
+              <input type="file" multiple className="hidden" disabled={busy} onChange={(e) => upload(e.target.files)} />
+            </label>
+            <LinkAdd kind="file" label="🔗 Drive link" onAdd={(url, raw) => onChange({ attachments: [...files, { url, name: linkLabel(raw) }] })} />
+          </div>
+        </div>
+      </Field>
+
+      <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2.5">
+        <div>
+          <div className="text-sm font-semibold">Allow file upload</div>
+          <div className="text-xs text-inkmuted">Learners can submit their work as a file</div>
+        </div>
+        <Switch on={lesson.allowUpload !== false} onChange={(v) => onChange({ allowUpload: v })} />
+      </div>
+      <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2.5">
+        <div>
+          <div className="text-sm font-semibold">Allow Google Drive link submissions</div>
+          <div className="text-xs text-inkmuted">Learners can paste a public Drive / Docs link instead of uploading</div>
+        </div>
+        <Switch on={lesson.allowLink !== false} onChange={(v) => onChange({ allowLink: v })} />
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Quiz builder launcher - opens modern modal builder ---------------- */
 function QuizBuilderLauncher({ lesson, onChange, userId }) {
   const [showBuilder, setShowBuilder] = useState(false);
@@ -489,14 +597,21 @@ function QuizBuilderLauncher({ lesson, onChange, userId }) {
       <div className="rounded-lg border border-dashed border-line bg-paper/50 p-8 text-center">
         <span className="text-2xl block mb-2">🎯</span>
         <p className="text-sm text-inkmuted mb-4">No quiz questions yet</p>
-        <button onClick={() => setShowBuilder(true)} className="btn btn-brand">
-          + Create Questions
-        </button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <button onClick={() => setShowBuilder(true)} className="btn btn-brand">
+            + Create Questions
+          </button>
+          <button onClick={() => setShowBuilder("import")} className="btn btn-ghost">
+            📄 Import from Word / Google Doc
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-inkmuted">Type the quiz in any document — numbered questions, lettered options, &ldquo;Answer: b&rdquo; — and upload it.</p>
         {showBuilder && (
           <QuizBuilder
             lesson={lesson}
             onChange={onChange}
             userId={userId}
+            initialImport={showBuilder === "import"}
             onClose={() => setShowBuilder(false)}
           />
         )}
@@ -545,11 +660,12 @@ function ImageSingle({ label, image, userId, onChange, compact }) {
   return (
     <div className={compact ? "mt-2" : "mt-2"}>
       {!compact && <div className="mb-1 text-xs font-semibold text-inkmuted">{label}</div>}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {image && <img src={image} alt="" className="h-12 w-12 rounded-lg border border-line object-cover" />}
         <label className="btn-ghost cursor-pointer text-xs">{busy ? "Uploading…" : image ? "Replace" : (compact ? "+ Image" : "+ Upload image")}
           <input type="file" accept="image/*" className="hidden" onChange={(e) => up(e.target.files)} />
         </label>
+        <LinkAdd kind="image" label="🔗 Link" onAdd={(url) => onChange(url)} />
         {image && <button type="button" className="text-xs text-danger" onClick={() => onChange("")}>Remove</button>}
       </div>
     </div>
@@ -581,6 +697,7 @@ function ImageList({ label, images, userId, onChange }) {
         <label className="btn-ghost cursor-pointer text-xs">{busy ? "Uploading…" : "+ Add images"}
           <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => up(e.target.files)} />
         </label>
+        <LinkAdd kind="image" label="🔗 Drive link" onAdd={(url) => onChange([...images, url])} />
       </div>
     </div>
   );

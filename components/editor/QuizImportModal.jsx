@@ -1,15 +1,20 @@
 "use client";
 import { useRef, useState } from "react";
-import { parseQuestions, detectFormat, CSV_TEMPLATE, MAX_QUESTIONS } from "@/lib/quizImport";
+import { parseQuestions, detectFormat, CSV_TEMPLATE, DOC_TEMPLATE, MAX_QUESTIONS } from "@/lib/quizImport";
 import { uid } from "@/lib/courseModel";
+import { apiFetch } from "@/lib/supabase";
+import { fileToText, bufferToText, quizTemplateDocx } from "@/lib/docText";
 
 // =============================================================
-// QuizImportModal — paste or upload a question bank (100–150+ at once).
-// Formats are sniffed, not asked for: CSV, TSV, JSON, Aiken, GIFT.
+// QuizImportModal — paste, upload or link a question bank (100–150+ at once).
+// Formats are sniffed, not asked for: Word/Google-Doc style, CSV, TSV, JSON,
+// Aiken, GIFT. Files: .docx, .pdf, .txt, .csv, .tsv, .json. Links: Google
+// Docs / Sheets / Drive / Dropbox.
 // =============================================================
 
 const FORMATS = [
   { id: "auto", label: "Auto-detect" },
+  { id: "doc", label: "Document (Word / Google Doc)" },
   { id: "csv", label: "CSV" },
   { id: "tsv", label: "TSV" },
   { id: "json", label: "JSON" },
@@ -23,6 +28,11 @@ export default function QuizImportModal({ onAdd, onClose }) {
   const [result, setResult] = useState(null);
   const [mode, setMode] = useState("append"); // append | replace
   const fileRef = useRef(null);
+  const [busy, setBusy] = useState("");      // "" | "file" | "link"
+  const [loadErr, setLoadErr] = useState("");
+  const [link, setLink] = useState("");
+  const [showGuide, setShowGuide] = useState(false);
+  const [source, setSource] = useState("");
 
   function run(raw = text, fmt = format) {
     if (!raw.trim()) { setResult(null); return; }
@@ -31,13 +41,44 @@ export default function QuizImportModal({ onAdd, onClose }) {
 
   async function onFile(file) {
     if (!file) return;
-    const raw = await file.text();
-    setText(raw);
-    // A .json/.csv extension is a stronger hint than sniffing the body.
-    const ext = (file.name.split(".").pop() || "").toLowerCase();
-    const fmt = ["csv", "tsv", "json"].includes(ext) ? ext : "auto";
-    setFormat(fmt);
-    run(raw, fmt);
+    setBusy("file"); setLoadErr("");
+    try {
+      const raw = await fileToText(file);
+      setText(raw);
+      setSource(file.name);
+      // A .json/.csv extension is a stronger hint than sniffing the body.
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const fmt = ["csv", "tsv", "json"].includes(ext) ? ext : "auto";
+      setFormat(fmt);
+      run(raw, fmt);
+    } catch (e) {
+      setLoadErr(e.message);
+    } finally {
+      setBusy("");
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  /** Google Docs / Sheets / Drive / Dropbox link -> text, via the server. */
+  async function onLink() {
+    if (!link.trim()) return;
+    setBusy("link"); setLoadErr("");
+    try {
+      const res = await apiFetch("/api/import/link", { url: link.trim() });
+      const bin = atob(res.data);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const raw = await bufferToText(u8.buffer, res.name || "");
+      setText(raw);
+      setSource(res.name || "link");
+      const fmt = /\.csv$/i.test(res.name || "") ? "csv" : "auto";
+      setFormat(fmt);
+      run(raw, fmt);
+    } catch (e) {
+      setLoadErr(e.message);
+    } finally {
+      setBusy("");
+    }
   }
 
   function accept() {
@@ -56,13 +97,18 @@ export default function QuizImportModal({ onAdd, onClose }) {
     onClose();
   }
 
-  function downloadTemplate() {
-    const url = URL.createObjectURL(new Blob([CSV_TEMPLATE], { type: "text/csv" }));
+  function save(blob, name) {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "quiz-template.csv";
+    a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  const downloadTemplate = (kind) => {
+    if (kind === "docx") save(new Blob([quizTemplateDocx(DOC_TEMPLATE)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), "quiz-template.docx");
+    else if (kind === "txt") save(new Blob([DOC_TEMPLATE], { type: "text/plain" }), "quiz-template.txt");
+    else save(new Blob([CSV_TEMPLATE], { type: "text/csv" }), "quiz-template.csv");
+  };
 
   const detected = text.trim() ? detectFormat(text) : null;
 
@@ -73,18 +119,71 @@ export default function QuizImportModal({ onAdd, onClose }) {
           <div>
             <h3 className="font-display text-xl font-bold">📥 Import questions</h3>
             <p className="mt-0.5 text-sm text-inkmuted">
-              Paste or upload up to {MAX_QUESTIONS} questions. CSV, TSV, JSON, Aiken and GIFT all work.
+              Type your quiz in Word or Google Docs and upload it — or paste / link up to {MAX_QUESTIONS} questions.
             </p>
           </div>
           <button onClick={onClose} className="shrink-0 text-inkmuted hover:text-ink">✕</button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button onClick={() => fileRef.current?.click()} className="btn-ghost">📎 Upload file</button>
-            <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,.json" className="hidden"
+          {/* ---- Ways in: upload a document, or paste a link ---- */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button onClick={() => fileRef.current?.click()} disabled={!!busy}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line px-4 py-5 text-center hover:border-brand disabled:opacity-60">
+              <span className="text-2xl">📄</span>
+              <span className="text-sm font-semibold">{busy === "file" ? "Reading file…" : "Upload a document"}</span>
+              <span className="text-xs text-inkmuted">Word (.docx), PDF, .txt, CSV or JSON</span>
+            </button>
+            <input ref={fileRef} type="file" accept=".docx,.pdf,.txt,.md,.csv,.tsv,.json,.gift,.doc,.htm,.html" className="hidden"
               onChange={(e) => onFile(e.target.files?.[0])} />
-            <button onClick={downloadTemplate} className="text-sm font-semibold text-brand">↓ CSV template</button>
+            <div className="rounded-xl border border-line p-4">
+              <div className="text-sm font-semibold">🔗 Import from a link</div>
+              <div className="mt-0.5 text-xs text-inkmuted">Google Doc / Sheet / Drive file / Dropbox — shared as &ldquo;Anyone with the link&rdquo;</div>
+              <div className="mt-2 flex gap-2">
+                <input className="input !py-2 text-sm" placeholder="https://docs.google.com/document/d/…" value={link}
+                  onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onLink()} />
+                <button onClick={onLink} disabled={!!busy || !link.trim()} className="btn-brand shrink-0 !px-3 !py-2 text-xs">{busy === "link" ? "…" : "Fetch"}</button>
+              </div>
+            </div>
+          </div>
+          {loadErr && <div className="mt-3 rounded-[8px] bg-red-50 px-3 py-2 text-sm text-danger">{loadErr}</div>}
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <span className="text-xs text-inkmuted">Templates:</span>
+            <button onClick={() => downloadTemplate("docx")} className="font-semibold text-brand">↓ Word (.docx)</button>
+            <button onClick={() => downloadTemplate("txt")} className="font-semibold text-brand">↓ Text (.txt)</button>
+            <button onClick={() => downloadTemplate("csv")} className="font-semibold text-brand">↓ CSV / Excel</button>
+            <button onClick={() => setShowGuide((v) => !v)} className="font-semibold text-inkmuted hover:text-ink">{showGuide ? "Hide" : "How to write"} the document format</button>
+          </div>
+
+          {showGuide && (
+            <div className="mt-3 grid gap-3 rounded-xl border border-line bg-paper p-4 text-xs sm:grid-cols-2">
+              <pre className="whitespace-pre-wrap rounded-lg bg-white p-3 font-mono leading-relaxed">{`1. What is 2 + 2?
+a) 3
+b) 4
+c) 5
+d) 6
+Answer: b
+Explanation: 2 + 2 = 4
+Marks: 1
+
+2. Capital of India?
+a) Mumbai
+b) New Delhi *
+c) Kolkata`}</pre>
+              <ul className="space-y-1.5 text-inkmuted">
+                <li>• <b className="text-ink">Number each question</b> — 1. / Q1) / Question 1: all work (Word&rsquo;s auto-numbering too).</li>
+                <li>• <b className="text-ink">Letter each option</b> — a) / (a) / A. — one per line, or all on one line.</li>
+                <li>• <b className="text-ink">Mark the answer</b> with <code>Answer: b</code>, or put <code>*</code> / ✓ after the right option.</li>
+                <li>• More than one right answer: <code>Answer: a, c</code>.</li>
+                <li>• Optional: <code>Explanation:</code> and <code>Marks:</code> lines.</li>
+                <li>• Questions without numbers are fine if a blank line separates them.</li>
+              </ul>
+            </div>
+          )}
+
+          <div className="mb-2 mt-5 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-inkmuted">{source ? `From ${source} — edit below if needed` : "…or paste your questions"}</span>
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs text-inkmuted">Format</span>
               <select className="input !w-auto !py-1.5 text-sm" value={format}
@@ -96,7 +195,7 @@ export default function QuizImportModal({ onAdd, onClose }) {
 
           <textarea
             className="input min-h-[180px] font-mono text-xs"
-            placeholder={"question,optionA,optionB,optionC,optionD,answer\nWhat is 2+2?,3,4,5,6,B\n\n…or paste JSON / Aiken / GIFT — it'll be detected."}
+            placeholder={"1. What is 2 + 2?\na) 3\nb) 4\nc) 5\nAnswer: b\n\n…or paste CSV / JSON / Aiken / GIFT — it'll be detected."}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onBlur={() => run()}

@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Field, SectionCard } from "@/components/ui";
 import RichText from "@/components/editor/RichText";
 import { uid, uploadImage, uploadVideo } from "@/lib/courseModel";
+import LinkAdd from "@/components/LinkAdd";
 
 export default function PageDetailsTab({ course, patch }) {
   const { user } = useAuth();
@@ -51,6 +52,11 @@ export default function PageDetailsTab({ course, patch }) {
           {uploading && <span className="text-xs text-inkmuted">Uploading…</span>}
           <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => onCoverFiles(e.target.files)} />
         </label>
+        <div className="mt-2 flex">
+          <LinkAdd kind="image" label="🔗 Or add a cover from a Google Drive link" className="w-full"
+            disabled={(course.coverImages?.length || 0) >= 10}
+            onAdd={(url) => patch({ coverImages: [...(course.coverImages || []), url].slice(0, 10) })} />
+        </div>
         {course.coverImages?.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {course.coverImages.map((u, i) => (
@@ -113,6 +119,7 @@ export default function PageDetailsTab({ course, patch }) {
                 <label className="flex h-14 w-20 cursor-pointer items-center justify-center rounded-lg border border-dashed border-line text-inkmuted hover:border-brand hover:text-brand">
                   + <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => onGalleryFiles(e.target.files)} />
                 </label>
+                <LinkAdd kind="image" label="🔗 Drive link" onAdd={(url) => setSection("gallery", { images: [...(s.gallery.images || []), url] })} />
               </div>
             </div>
           )}

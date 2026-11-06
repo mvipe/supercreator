@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/supabase";
 import { videoThumb } from "@/lib/courseModel";
 import VideoPlayer, { ytId } from "@/components/learn/VideoPlayer";
+import DriveEmbed from "@/components/learn/DriveEmbed";
+import { driveId, toPreviewUrl } from "@/lib/driveLink";
 
 // =============================================================
 // SecureVideo — protected lesson playback.
@@ -25,8 +27,10 @@ export default function SecureVideo({ lesson, courseId, accent = "#2E6EF7", wate
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // A YouTube link needs no signing — play it straight away.
-  const yt = ytId(lesson.videoUrl);
+  // A YouTube link needs no signing — play it straight away. Same for a
+  // public Google Drive video (Drive's own player).
+  const drive = !ytId(lesson.videoUrl) && driveId(lesson.videoUrl) ? toPreviewUrl(lesson.videoUrl) : null;
+  const yt = ytId(lesson.videoUrl) || (drive ? "drive" : null);
 
   // Poster frame, so a lesson doesn't open on a black rectangle:
   // the lesson's own thumbnail → the video's YouTube/Vimeo still →
@@ -81,6 +85,15 @@ export default function SecureVideo({ lesson, courseId, accent = "#2E6EF7", wate
 
   if (!yt && !url) {
     return <div className="mt-4 flex aspect-video items-center justify-center rounded-2xl bg-black text-sm text-white/60">No video for this lesson</div>;
+  }
+
+  if (drive) {
+    return (
+      <div className="mt-4 space-y-4">
+        <DriveEmbed src={drive} title={lesson.title || "Video"} watermark={watermark} />
+        {lesson.text && <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{lesson.text}</p>}
+      </div>
+    );
   }
 
   return (

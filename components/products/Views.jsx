@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ytEmbed, inr } from "@/lib/courseModel";
+import { toPreviewUrl } from "@/lib/driveLink";
 import { productPrice, productMrp } from "@/lib/products";
 import { BuiltWithLink, CreatorChip } from "@/components/Branding";
 import CopyLinkButton from "@/components/CopyLinkButton";
@@ -90,7 +91,7 @@ function Label({ accent, children }) {
 /** Cover carousel — video first (if any), then every uploaded image. */
 function Cover({ images = [], video }) {
   const [slide, setSlide] = useState(0);
-  const embed = ytEmbed(video);
+  const embed = ytEmbed(video) || toPreviewUrl(video);
   const count = (images?.length || 0) + (embed ? 1 : 0);
   if (!count) return null;
 
@@ -100,7 +101,7 @@ function Cover({ images = [], video }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-line">
       {showVideo ? (
-        <div className="aspect-video w-full"><iframe src={embed} className="h-full w-full" allowFullScreen title="video" /></div>
+        <div className="aspect-video w-full"><iframe src={embed} className="h-full w-full" allow="autoplay; fullscreen" allowFullScreen title="video" /></div>
       ) : (
         images[imgIndex] && (
           <div className="flex w-full items-center justify-center bg-paper">
@@ -286,7 +287,7 @@ export function EventView({ product, mode = "live", onBuy }) {
 export function LockedView({ product, mode = "live", onBuy, unlocked = false }) {
   const d = product.data || {};
   const accent = d.accent || "#2E6EF7";
-  const embed = ytEmbed(d.videoUrl);
+  const embed = ytEmbed(d.videoUrl) || toPreviewUrl(d.videoUrl);
   return (
     <Shell accent={accent}>
       <div className="flex items-center gap-2">
@@ -312,7 +313,7 @@ export function LockedView({ product, mode = "live", onBuy, unlocked = false }) 
       ) : (
         <div className="mt-6 space-y-5">
           {d.message && <p className="whitespace-pre-wrap rounded-2xl border border-line bg-paper p-5 text-[15px] leading-relaxed">{d.message}</p>}
-          {embed && <div className="aspect-video overflow-hidden rounded-2xl border border-line"><iframe src={embed} className="h-full w-full" allowFullScreen title="video" /></div>}
+          {embed && <div className="aspect-video overflow-hidden rounded-2xl border border-line"><iframe src={embed} className="h-full w-full" allow="autoplay; fullscreen" allowFullScreen title="video" /></div>}
           {!embed && d.videoUrl && <video src={d.videoUrl} controls className="aspect-video w-full rounded-2xl border border-line bg-black" />}
           {d.images?.map((u, i) => <img key={i} src={u} alt="" className="w-full rounded-2xl border border-line" />)}
           {d.files?.length > 0 && (
@@ -405,7 +406,7 @@ export function BookView({ product, mode = "live", onBuy, owned = false, creator
   const isFree = d.priceMode === "free";
   const price = isPwyw ? Number(d.minPrice) || 0 : productPrice("book", d);
   const mrp = productMrp("book", d);
-  const embed = ytEmbed(d.coverVideo);
+  const embed = ytEmbed(d.coverVideo) || toPreviewUrl(d.coverVideo);
 
   const cover = (
     <div className="space-y-4">

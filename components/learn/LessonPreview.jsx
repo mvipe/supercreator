@@ -2,6 +2,7 @@
 import { useState } from "react";
 import SecureVideo from "@/components/learn/SecureVideo";
 import SecureNotes from "@/components/learn/SecureNotes";
+import SecureAudio from "@/components/learn/SecureAudio";
 
 // =============================================================
 // LessonPreview — the "Free preview" modal on the public course page.
@@ -73,14 +74,7 @@ function Body({ lesson, type, courseId, accent }) {
   }
 
   if (type === "audio") {
-    return (
-      <div className="p-5">
-        {lesson.audioUrl
-          ? <audio src={lesson.audioUrl} controls controlsList="nodownload" className="w-full" />
-          : <p className="text-sm text-inkmuted">No audio attached to this lesson yet.</p>}
-        {lesson.text && <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed">{lesson.text}</p>}
-      </div>
-    );
+    return <div className="px-4 pb-4"><SecureAudio lesson={lesson} courseId={courseId} /></div>;
   }
 
   // video

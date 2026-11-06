@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/supabase";
+import ProtectedPdf from "@/components/learn/ProtectedPdf";
+import DriveEmbed from "@/components/learn/DriveEmbed";
 
 // =============================================================
 // SecureNotes — lesson notes / PDFs with a creator-controlled download gate.
@@ -10,10 +12,10 @@ import { apiFetch } from "@/lib/supabase";
 //   allowDownload = true   -> viewer + a real Download button
 //   allowDownload = false  -> in-app viewer only, no download affordance
 //
-// Honest scope: this controls the *product*, not physics. A determined user
-// can still pull a signed URL from the network tab while viewing it. What it
-// gives you: files aren't public, links die in 2 hours, they're tied to a
-// purchase, and casual "right-click → Save as" is gone.
+// View-only PDFs are fetched through /api/learn/stream and drawn on canvas
+// (ProtectedPdf) — there's no file URL in the page to copy from Inspect, and
+// the stream link refuses to open as a page or be saved. Drive-linked notes
+// use Google's viewer (download control = the file's own Drive setting).
 // =============================================================
 
 export default function SecureNotes({ lesson, courseId, accent = "#2E6EF7", watermark }) {
@@ -26,7 +28,7 @@ export default function SecureNotes({ lesson, courseId, accent = "#2E6EF7", wate
       // New multi-file shape, or the legacy single-file shape.
       const files = res.files?.length
         ? res.files
-        : (res.url ? [{ url: res.url, fileName: lesson.fileName, fileType: lesson.fileType }] : []);
+        : (res.url ? [{ url: res.stream ? "" : res.url, stream: res.stream, fileName: lesson.fileName, fileType: lesson.fileType }] : []);
       if (!files.length) throw new Error("No file attached to this lesson.");
       setState({ loading: false, files, allowDownload: !!res.allowDownload, err: "" });
     } catch (e) {
@@ -69,6 +71,7 @@ export default function SecureNotes({ lesson, courseId, accent = "#2E6EF7", wate
     <div className="mt-4 space-y-6">
       {files.map((f, i) => {
         const isPdf = /\.pdf(\?|$)/i.test(f.fileName || f.url || "") || f.fileType === "application/pdf";
+        const canDownload = allowDownload && !f.drive && !!f.url;
         return (
           <div key={i} className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl border border-b-0 border-line bg-paper px-4 py-3">
@@ -78,10 +81,10 @@ export default function SecureNotes({ lesson, courseId, accent = "#2E6EF7", wate
                   {f.fileName || lesson.title || "Notes"}
                 </div>
                 <div className="text-xs text-inkmuted">
-                  {allowDownload ? "You can download this file" : "View only — the creator has disabled downloads"}
+                  {f.drive ? "Google Drive file" : canDownload ? "You can download this file" : "View only — the creator has disabled downloads"}
                 </div>
               </div>
-              {allowDownload ? (
+              {canDownload ? (
                 <button onClick={() => download(f.url, f.fileName)} className="btn text-white" style={{ background: accent }}>
                   ↓ Download
                 </button>
@@ -94,9 +97,14 @@ export default function SecureNotes({ lesson, courseId, accent = "#2E6EF7", wate
               className="relative -mt-4 overflow-hidden rounded-b-2xl border border-line bg-[#323639]"
               onContextMenu={allowDownload ? undefined : (e) => e.preventDefault()}
             >
-              {isPdf ? (
+              {f.drive ? (
+                <DriveEmbed src={f.preview} title={f.fileName || lesson.title || "Notes"} aspect="doc" viewOnly={!allowDownload}
+                  className="!rounded-none !border-0" />
+              ) : isPdf && !canDownload && f.stream ? (
+                <ProtectedPdf src={f.stream} watermark={watermark} title={f.fileName || lesson.title || "Notes"} />
+              ) : isPdf ? (
                 <iframe
-                  src={allowDownload ? f.url : `${f.url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                  src={f.url}
                   className="h-[75vh] w-full"
                   title={f.fileName || lesson.title || "Notes"}
                 />
@@ -104,13 +112,13 @@ export default function SecureNotes({ lesson, courseId, accent = "#2E6EF7", wate
                 <div className="flex h-[40vh] flex-col items-center justify-center gap-3 bg-white p-6 text-center">
                   <div className="text-4xl">📄</div>
                   <p className="text-sm text-inkmuted">This file type can't be previewed in the browser.</p>
-                  {allowDownload
+                  {canDownload
                     ? <button onClick={() => download(f.url, f.fileName)} className="btn text-white" style={{ background: accent }}>↓ Download to view</button>
                     : <p className="text-xs text-inkmuted">The creator has disabled downloads for this lesson, so it can't be opened here.</p>}
                 </div>
               )}
 
-              {watermark && !allowDownload && (
+              {watermark && !allowDownload && !isPdf && (
                 <div aria-hidden="true"
                   className="pointer-events-none absolute bottom-3 right-3 select-none rounded bg-black/50 px-2 py-1 font-mono text-[11px] text-white/70">
                   {watermark}
